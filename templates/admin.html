@@ -1,0 +1,829 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Calendar Management{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-3 sm:p-4 lg:p-6" x-data="adminCalendarApp()">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 space-y-4 sm:space-y-0">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Calendar Admin</h1>
+            <p class="text-sm sm:text-base text-gray-600">Manage your events</p>
+        </div>
+        <div class="flex flex-wrap gap-2 sm:gap-4">
+            <a href="/" 
+               class="bg-green-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base touch-manipulation">
+                View Calendar
+            </a>
+            <a href="/admin/stats" 
+               class="bg-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base touch-manipulation">
+                Stats
+            </a>
+            <button @click="showAddEventModal = true" 
+                    class="bg-blue-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base touch-manipulation">
+                Add Event
+            </button>
+            <button @click="showBulkImportModal = true" 
+                    class="bg-green-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base touch-manipulation">
+                Bulk Import
+            </button>
+            <a href="/admin/logout" 
+               class="bg-gray-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm sm:text-base touch-manipulation">
+                Logout
+            </a>
+        </div>
+    </div>
+
+    <!-- Mini Calendar -->
+    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 sm:mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <button @click="previousMonth()" class="p-2 sm:p-3 hover:bg-gray-100 rounded-full touch-manipulation">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+            <h2 class="text-lg sm:text-xl font-semibold text-gray-800" x-text="currentMonthYear"></h2>
+            <button @click="nextMonth()" class="p-2 sm:p-3 hover:bg-gray-100 rounded-full touch-manipulation">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Calendar Grid -->
+        <div class="grid grid-cols-7 gap-0.5 sm:gap-1 mb-2">
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Sun</div>
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Mon</div>
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Tue</div>
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Wed</div>
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Thu</div>
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Fri</div>
+            <div class="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">Sat</div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-0.5 sm:gap-1">
+            <template x-for="day in calendarDays" :key="day.date">
+                <div class="relative">
+                    <button 
+                        @click="selectDate(day.date)"
+                        :class="{
+                            'bg-blue-500 text-white': day.isSelected,
+                            'bg-gray-100': !day.isSelected && day.isCurrentMonth,
+                            'text-gray-400': !day.isCurrentMonth,
+                            'text-gray-800': day.isCurrentMonth && !day.isSelected
+                        }"
+                        class="w-full h-8 sm:h-10 rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-100 transition-colors relative touch-manipulation min-h-[2rem] sm:min-h-[2.5rem]"
+                        :disabled="!day.isCurrentMonth"
+                    >
+                        <span x-text="day.dayNumber"></span>
+                        <div x-show="day.hasEvents" class="absolute bottom-0.5 sm:bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full"></div>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Events List -->
+    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h3 class="text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4" x-text="selectedDateText"></h3>
+        
+        <div x-show="loading" class="text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+
+        <div x-show="!loading && events.length === 0" class="text-center py-8 text-gray-500">
+            No events scheduled for this date.
+        </div>
+
+        <div x-show="!loading && events.length > 0" class="space-y-4">
+            <template x-for="event in events" :key="event.id">
+                <div class="border-l-4 pl-4 py-2 bg-gray-50 rounded-r-lg" :style="'border-left-color: ' + (event.category_color || '#3B82F6')">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-medium text-gray-800" x-text="event.title"></h4>
+                                <span x-show="event.category_name" 
+                                      class="px-2 py-1 text-xs font-medium rounded-full text-white"
+                                      :style="'background-color: ' + (event.category_color || '#3B82F6')"
+                                      x-text="event.category_name"></span>
+                            </div>
+                            <p class="text-sm text-gray-600" x-text="formatEventTime(event.start_datetime)"></p>
+                            <p x-show="event.location" class="text-sm text-gray-500" x-text="'📍 ' + event.location"></p>
+                            <p x-show="event.description" class="text-sm text-gray-600 mt-1" x-text="event.description"></p>
+                        </div>
+                        <div class="flex space-x-2 ml-4">
+                            <button @click="editEvent(event)" 
+                                    class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                Edit
+                            </button>
+                            <button @click="deleteEvent(event.id)" 
+                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Add/Edit Event Modal -->
+    <div x-show="showAddEventModal || showEditEventModal" 
+         x-cloak
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+         @click.self="closeModal()">
+        <div class="relative top-4 sm:top-20 mx-auto p-4 sm:p-5 border w-11/12 sm:w-96 max-w-md shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 mb-4" x-text="showAddEventModal ? 'Add New Event' : 'Edit Event'"></h3>
+                
+                <!-- Smart Entry Section -->
+                <div x-show="showAddEventModal" class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h4 class="text-sm font-medium text-blue-900 mb-2">🤖 Smart Entry (AI-Powered)</h4>
+                    <p class="text-xs text-blue-700 mb-3">Type a natural language description and let AI parse it for you!</p>
+                    <div class="flex gap-2">
+                        <input type="text" 
+                               x-model="smartEntryText" 
+                               @blur="parseSmartEntry()"
+                               placeholder="e.g., 'Team sync with Sam at 10am next Wednesday in Zoom'"
+                               class="flex-1 text-sm border border-blue-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <button type="button" 
+                                @click="parseSmartEntry()"
+                                :disabled="parsing"
+                                class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            <span x-show="!parsing">Parse</span>
+                            <span x-show="parsing">...</span>
+                        </button>
+                    </div>
+                    <div x-show="smartEntryError" class="mt-2 text-xs text-red-600" x-text="smartEntryError"></div>
+                </div>
+                
+                <form @submit.prevent="saveEvent()">
+                    <div class="space-y-3 sm:space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Title *</label>
+                            <input type="text" x-model="eventForm.title" required
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Date *</label>
+                            <input type="date" x-model="eventForm.date" required
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Time *</label>
+                            <input type="time" x-model="eventForm.time" required
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Host/Organizer</label>
+                            <input type="text" x-model="eventForm.host"
+                                   placeholder="e.g., John Smith, Tech Meetup Group"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Location</label>
+                            <input type="text" x-model="eventForm.location"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Category</label>
+                            <select x-model="eventForm.category_id" 
+                                    class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select a category</option>
+                                <template x-for="category in categories" :key="category.id">
+                                    <option :value="category.id" x-text="category.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tags</label>
+                            <input type="text" x-model="eventForm.tags"
+                                   placeholder="e.g., Meeting, Online, Important"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Comma-separated tags for better organization</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Price Information</label>
+                            <input type="text" x-model="eventForm.price_info"
+                                   placeholder="e.g., Free, $25, Free; dog show $25"
+                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Leave blank for "Free" or specify pricing like "$25" or "Free; dog show $25"</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Description</label>
+                            <textarea x-model="eventForm.description" rows="3"
+                                      class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-4 sm:mt-6">
+                        <button type="button" @click="closeModal()"
+                                class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm sm:text-base touch-manipulation">
+                            Cancel
+                        </button>
+                        <button type="submit" :disabled="saving"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm sm:text-base touch-manipulation">
+                            <span x-show="!saving" x-text="showAddEventModal ? 'Add Event' : 'Update Event'"></span>
+                            <span x-show="saving">Saving...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal -->
+<div x-show="showBulkImportModal" 
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+     style="z-index: 9999;">
+    <div class="bg-white rounded-lg p-4 sm:p-6 w-11/12 sm:w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-0">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-base sm:text-lg font-semibold">Bulk Import Events</h3>
+            <button @click="closeBulkImportModal()" class="text-gray-500 hover:text-gray-700 touch-manipulation">
+                <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Paste Event Information
+                </label>
+                <p class="text-xs text-gray-500 mb-2">
+                    Paste structured event information (like from a news article or event listing). 
+                    Each event should be clearly separated. The system will automatically parse titles, dates, times, locations, and pricing.
+                </p>
+                <textarea x-model="bulkImportText" 
+                          rows="15"
+                          placeholder="Paste your event information here..."
+                          class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            
+                     <div class="space-y-3">
+                         <div>
+                             <label class="block text-sm font-medium text-gray-700 mb-2">
+                                 Extraction Method
+                             </label>
+                             <select x-model="extractionMethod" 
+                                     class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                 <option value="enhanced">Enhanced (Rule-based)</option>
+                                 <option value="advanced">Advanced (NLP)</option>
+                                 <option value="llm">AI-Powered (LLM)</option>
+                             </select>
+                             <p class="text-xs text-gray-500 mt-1">
+                                 <span x-show="extractionMethod === 'enhanced'">Fast, reliable pattern matching</span>
+                                 <span x-show="extractionMethod === 'advanced'">Uses spaCy/NLTK for better understanding</span>
+                                 <span x-show="extractionMethod === 'llm'">Most accurate, requires OpenAI API key</span>
+                             </p>
+                         </div>
+                         
+                         <div class="flex gap-2">
+                             <button @click="extractEvents()" 
+                                     :disabled="!bulkImportText.trim() || extracting"
+                                     class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors">
+                                 <span x-show="!extracting">Extract Events</span>
+                                 <span x-show="extracting">Extracting...</span>
+                             </button>
+                             <button @click="clearBulkImport()" 
+                                     class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                                 Clear
+                             </button>
+                         </div>
+                     </div>
+            
+            <!-- Extracted Events Preview -->
+            <div x-show="extractedEvents.length > 0" class="mt-6">
+                <h4 class="text-md font-semibold mb-3">Extracted Events (<span x-text="extractedEvents.length"></span>)</h4>
+                <div class="space-y-3 max-h-60 overflow-y-auto">
+                    <template x-for="(event, index) in extractedEvents" :key="index">
+                        <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h5 class="font-medium text-gray-900" x-text="event.title || 'Untitled Event'"></h5>
+                                    <div class="text-sm text-gray-600 mt-1 space-y-1">
+                                        <p x-show="event.date"><strong>Date:</strong> <span x-text="event.date"></span></p>
+                                        <p x-show="event.time"><strong>Time:</strong> <span x-text="event.time"></span></p>
+                                        <p x-show="event.location"><strong>Location:</strong> <span x-text="event.location"></span></p>
+                                        <p x-show="event.price_info"><strong>Price:</strong> <span x-text="event.price_info"></span></p>
+                                        <p x-show="event.description" class="text-xs text-gray-500 mt-2" x-text="event.description ? event.description.substring(0, 100) + '...' : ''"></p>
+                                    </div>
+                                </div>
+                                <button @click="removeExtractedEvent(index)" 
+                                        class="text-red-600 hover:text-red-800 ml-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <div class="mt-4 flex gap-2">
+                    <button @click="importExtractedEvents()" 
+                            :disabled="extractedEvents.length === 0 || importing"
+                            class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors">
+                        <span x-show="!importing">Import All Events (<span x-text="extractedEvents.length"></span>)</span>
+                        <span x-show="importing">Importing...</span>
+                    </button>
+                    <button @click="clearExtractedEvents()" 
+                            class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                        Clear Preview
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Import Results -->
+            <div x-show="importResults.length > 0" class="mt-6">
+                <h4 class="text-md font-semibold mb-3">Import Results</h4>
+                <div class="space-y-2">
+                    <template x-for="result in importResults" :key="result.index">
+                        <div class="p-2 rounded" :class="result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                            <span x-text="result.success ? '✅' : '❌'"></span>
+                            <span x-text="result.message"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+function adminCalendarApp() {
+    return {
+        currentDate: new Date(),
+        selectedDate: null,
+        events: [],
+        loading: false,
+        eventsByDate: {},
+        showAddEventModal: false,
+        showEditEventModal: false,
+        showBulkImportModal: false,
+        saving: false,
+        editingEventId: null,
+        categories: [],
+        smartEntryText: '',
+        parsing: false,
+        smartEntryError: '',
+        bulkImportText: '',
+        extractionMethod: 'enhanced',
+        extracting: false,
+        extractedEvents: [],
+        importing: false,
+        importResults: [],
+        eventForm: {
+            title: '',
+            date: '',
+            time: '',
+            host: '',
+            location: '',
+            description: '',
+            category_id: '',
+            tags: '',
+            price_info: ''
+        },
+
+        get currentMonthYear() {
+            return this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        },
+
+        get selectedDateText() {
+            if (!this.selectedDate) return 'Select a date to view events';
+            return this.selectedDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        },
+
+        get calendarDays() {
+            const year = this.currentDate.getFullYear();
+            const month = this.currentDate.getMonth();
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() - firstDay.getDay());
+            
+            const days = [];
+            
+            for (let i = 0; i < 42; i++) {
+                const date = new Date(startDate);
+                date.setDate(startDate.getDate() + i);
+                
+                const dateStr = this.formatDate(date);
+                const hasEvents = this.eventsByDate[dateStr] && this.eventsByDate[dateStr].length > 0;
+                
+                days.push({
+                    date: dateStr,
+                    dayNumber: date.getDate(),
+                    isCurrentMonth: date.getMonth() === month,
+                    isSelected: this.selectedDate && this.formatDate(this.selectedDate) === dateStr,
+                    hasEvents: hasEvents
+                });
+            }
+            
+            return days;
+        },
+
+        async init() {
+            await this.loadCategories();
+            await this.loadEventsForMonth();
+        },
+
+        async loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                this.categories = await response.json();
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        },
+
+        async parseSmartEntry() {
+            if (!this.smartEntryText.trim()) return;
+            
+            this.parsing = true;
+            this.smartEntryError = '';
+            
+            try {
+                const response = await fetch('/api/ai/parse-event', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: this.smartEntryText })
+                });
+                
+                if (response.ok) {
+                    const parsed = await response.json();
+                    
+                    // Populate form fields
+                    this.eventForm.title = parsed.title || '';
+                    this.eventForm.date = parsed.date || '';
+                    this.eventForm.time = parsed.time || '';
+                    this.eventForm.host = parsed.host || '';
+                    this.eventForm.location = parsed.location || '';
+                    this.eventForm.description = parsed.description || '';
+                    this.eventForm.price_info = parsed.price_info || '';
+                    
+                    // Handle tags
+                    if (parsed.tags) {
+                        if (typeof parsed.tags === 'string') {
+                            try {
+                                const tagsArray = JSON.parse(parsed.tags);
+                                this.eventForm.tags = tagsArray.join(', ');
+                            } catch {
+                                this.eventForm.tags = parsed.tags;
+                            }
+                        } else if (Array.isArray(parsed.tags)) {
+                            this.eventForm.tags = parsed.tags.join(', ');
+                        }
+                    }
+                    
+                    // Clear smart entry text
+                    this.smartEntryText = '';
+                } else {
+                    const error = await response.json();
+                    this.smartEntryError = error.error || 'Parsing failed';
+                }
+            } catch (error) {
+                console.error('Error parsing smart entry:', error);
+                this.smartEntryError = 'Network error occurred';
+            } finally {
+                this.parsing = false;
+            }
+        },
+
+        async loadEventsForMonth() {
+            const year = this.currentDate.getFullYear();
+            const month = this.currentDate.getMonth() + 1;
+            
+            try {
+                const response = await fetch(`/api/events?month=${month}&year=${year}`);
+                const events = await response.json();
+                
+                this.eventsByDate = {};
+                events.forEach(event => {
+                    const date = new Date(event.start_datetime);
+                    const dateStr = this.formatDate(date);
+                    if (!this.eventsByDate[dateStr]) {
+                        this.eventsByDate[dateStr] = [];
+                    }
+                    this.eventsByDate[dateStr].push(event);
+                });
+            } catch (error) {
+                console.error('Error loading events:', error);
+            }
+        },
+
+        async selectDate(dateStr) {
+            this.selectedDate = new Date(dateStr);
+            this.loading = true;
+            
+            try {
+                const response = await fetch(`/api/events?date=${dateStr}`);
+                this.events = await response.json();
+            } catch (error) {
+                console.error('Error loading events for date:', error);
+                this.events = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async previousMonth() {
+            this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+            await this.loadEventsForMonth();
+        },
+
+        async nextMonth() {
+            this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+            await this.loadEventsForMonth();
+        },
+
+        editEvent(event) {
+            this.editingEventId = event.id;
+            
+            // Handle tags
+            let tags = '';
+            if (event.tags) {
+                try {
+                    const tagsArray = JSON.parse(event.tags);
+                    tags = tagsArray.join(', ');
+                } catch {
+                    tags = event.tags;
+                }
+            }
+            
+            this.eventForm = {
+                title: event.title,
+                date: this.formatDate(new Date(event.start_datetime)),
+                time: this.formatTime(new Date(event.start_datetime)),
+                host: event.host || '',
+                location: event.location || '',
+                description: event.description || '',
+                category_id: event.category_id || '',
+                tags: tags,
+                price_info: event.price_info || ''
+            };
+            this.showEditEventModal = true;
+        },
+
+        async deleteEvent(eventId) {
+            if (!confirm('Are you sure you want to delete this event?')) return;
+            
+            try {
+                const response = await fetch(`/api/events/${eventId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    await this.loadEventsForMonth();
+                    if (this.selectedDate) {
+                        await this.selectDate(this.formatDate(this.selectedDate));
+                    }
+                } else {
+                    alert('Error deleting event');
+                }
+            } catch (error) {
+                console.error('Error deleting event:', error);
+                alert('Error deleting event');
+            }
+        },
+
+        async saveEvent() {
+            this.saving = true;
+            
+            try {
+                const startDatetime = `${this.eventForm.date}T${this.eventForm.time}:00`;
+                // Handle tags - convert comma-separated string to array
+                let tags = this.eventForm.tags;
+                if (tags && typeof tags === 'string') {
+                    tags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+                }
+                
+                const eventData = {
+                    title: this.eventForm.title,
+                    start_datetime: startDatetime,
+                    host: this.eventForm.host,
+                    location: this.eventForm.location,
+                    description: this.eventForm.description,
+                    category_id: this.eventForm.category_id || null,
+                    tags: tags,
+                    price_info: this.eventForm.price_info || 'Free'
+                };
+                
+                const url = this.showAddEventModal ? '/api/events' : `/api/events/${this.editingEventId}`;
+                const method = this.showAddEventModal ? 'POST' : 'PUT';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(eventData)
+                });
+                
+                if (response.ok) {
+                    this.closeModal();
+                    await this.loadEventsForMonth();
+                    if (this.selectedDate) {
+                        await this.selectDate(this.formatDate(this.selectedDate));
+                    }
+                } else {
+                    alert('Error saving event');
+                }
+            } catch (error) {
+                console.error('Error saving event:', error);
+                alert('Error saving event');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        closeModal() {
+            this.showAddEventModal = false;
+            this.showEditEventModal = false;
+            this.editingEventId = null;
+            this.smartEntryText = '';
+            this.smartEntryError = '';
+            this.eventForm = {
+                title: '',
+                date: '',
+                time: '',
+                host: '',
+                location: '',
+                description: '',
+                category_id: '',
+                tags: '',
+                price_info: ''
+            };
+        },
+
+        closeBulkImportModal() {
+            this.showBulkImportModal = false;
+            this.bulkImportText = '';
+            this.extractedEvents = [];
+            this.importResults = [];
+        },
+
+        async extractEvents() {
+            if (!this.bulkImportText.trim()) return;
+            
+            this.extracting = true;
+            this.extractedEvents = [];
+            
+            try {
+                const response = await fetch('/api/ai/extract-events', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        text: this.bulkImportText,
+                        method: this.extractionMethod
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    this.extractedEvents = data.events || [];
+                } else {
+                    alert('Failed to extract events. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error extracting events:', error);
+                alert('Error extracting events. Please try again.');
+            } finally {
+                this.extracting = false;
+            }
+        },
+
+        removeExtractedEvent(index) {
+            this.extractedEvents.splice(index, 1);
+        },
+
+        clearExtractedEvents() {
+            this.extractedEvents = [];
+        },
+
+        clearBulkImport() {
+            this.bulkImportText = '';
+            this.extractedEvents = [];
+            this.importResults = [];
+        },
+
+        async importExtractedEvents() {
+            if (this.extractedEvents.length === 0) return;
+            
+            this.importing = true;
+            this.importResults = [];
+            
+            for (let i = 0; i < this.extractedEvents.length; i++) {
+                const event = this.extractedEvents[i];
+                
+                try {
+                    // Convert extracted event to the format expected by the API
+                    const eventData = {
+                        title: event.title || 'Untitled Event',
+                        start_datetime: this.createStartDatetime(event.date, event.time),
+                        host: event.host || '',
+                        location: event.location || '',
+                        description: event.description || '',
+                        category_id: null,
+                        tags: event.tags || [],
+                        price_info: event.price_info || 'Free'
+                    };
+                    
+                    const response = await fetch('/api/events', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(eventData)
+                    });
+                    
+                    if (response.ok) {
+                        this.importResults.push({
+                            index: i,
+                            success: true,
+                            message: `✅ "${event.title}" imported successfully`
+                        });
+                    } else {
+                        this.importResults.push({
+                            index: i,
+                            success: false,
+                            message: `❌ Failed to import "${event.title}"`
+                        });
+                    }
+                } catch (error) {
+                    this.importResults.push({
+                        index: i,
+                        success: false,
+                        message: `❌ Error importing "${event.title}": ${error.message}`
+                    });
+                }
+            }
+            
+            this.importing = false;
+            
+            // Reload events to show the new ones
+            await this.loadEventsForMonth();
+        },
+
+        createStartDatetime(date, time) {
+            // Create a proper datetime string from date and time
+            if (!date) {
+                // Default to today if no date
+                date = new Date().toISOString().split('T')[0];
+            }
+            
+            if (!time) {
+                // Default to noon if no time
+                time = '12:00';
+            }
+            
+            return `${date}T${time}:00`;
+        },
+
+        formatDate(date) {
+            return date.toISOString().split('T')[0];
+        },
+
+        formatTime(date) {
+            return date.toTimeString().slice(0, 5);
+        },
+
+        formatEventTime(datetime) {
+            const date = new Date(datetime);
+            return date.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+        }
+    }
+}
+</script>
+{% endblock %}
