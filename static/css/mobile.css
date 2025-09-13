@@ -964,6 +964,39 @@
     -webkit-overflow-scrolling: touch;
 }
 
+/* Scrollable List with Fade Effect */
+.events-container .space-y-4 {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+}
+
+/* Fade Effect - Only when not at end of list */
+.events-container .space-y-4.fade-bottom::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(to top, 
+        rgba(255, 255, 255, 1) 0%, 
+        rgba(255, 255, 255, 0.9) 20%, 
+        rgba(255, 255, 255, 0.7) 40%, 
+        rgba(255, 255, 255, 0.4) 60%, 
+        rgba(255, 255, 255, 0.2) 80%, 
+        rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 0.3s ease;
+}
+
+/* No fade when at end of list */
+.events-container .space-y-4:not(.fade-bottom)::after {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
 .event-card {
     backdrop-filter: blur(10px);
     background: rgba(255, 255, 255, 0.95);
@@ -1050,8 +1083,13 @@
         border-radius: 16px;
     }
     
-    .fade-overlay {
-        height: 24px;
+    /* Mobile scrollable list optimizations */
+    .events-container .space-y-4 {
+        max-height: 500px; /* Slightly smaller on mobile */
+    }
+    
+    .events-container .space-y-4.fade-bottom::after {
+        height: 60px; /* Smaller fade on mobile */
     }
 }
 

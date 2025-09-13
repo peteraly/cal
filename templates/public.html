@@ -140,12 +140,15 @@
             
             <!-- Events List (Bottom Half) -->
             <div x-show="!loading" class="relative events-container" x-ref="eventsContainer">
-                <!-- Scrollable Events Container -->
-                <div class="space-y-4 pb-8">
-                    <template x-for="event in filteredEvents" :key="event.id">
+                <!-- Scrollable Events Container - Limited Height for 4 Events -->
+                <div class="space-y-4 pb-8 max-h-[600px] sm:max-h-[500px] overflow-y-auto" 
+                     :class="{'fade-bottom': filteredEvents.length > 4 && !isAtEndOfList()}"
+                     @scroll="handleScroll($event)">
+                    <template x-for="(event, index) in filteredEvents" :key="event.id">
                         <div class="event-card bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all duration-300 cursor-pointer group mx-2"
                              :data-event-id="event.id"
                              :data-event-date="event.start_datetime.split('T')[0]"
+                             :data-event-index="index"
                              @click="toggleEvent(event.id)">
                             
                             <!-- Event Header -->
@@ -217,9 +220,6 @@
                         </div>
                     </template>
                 </div>
-                
-                <!-- Fade Effect Overlay -->
-                <div class="absolute bottom-0 left-0 right-0 h-16 fade-overlay pointer-events-none"></div>
             </div>
             
             <!-- No Events Message for Selected Date -->
@@ -523,6 +523,30 @@ function publicApp() {
                     });
                 }
             });
+        },
+        
+        handleScroll(event) {
+            // Update scroll position for fade effect
+            this.$nextTick(() => {
+                this.updateFadeEffect();
+            });
+        },
+        
+        isAtEndOfList() {
+            const container = this.$refs.eventsContainer?.querySelector('.space-y-4');
+            if (!container) return false;
+            
+            const scrollTop = container.scrollTop;
+            const scrollHeight = container.scrollHeight;
+            const clientHeight = container.clientHeight;
+            
+            // Consider at end if within 50px of bottom
+            return (scrollHeight - scrollTop - clientHeight) < 50;
+        },
+        
+        updateFadeEffect() {
+            // This function will be called to update the fade effect
+            // The CSS class will handle the visual changes
         },
         
         initializeMap() {
