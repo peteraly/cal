@@ -338,43 +338,51 @@ def admin_stats():
 @app.route('/api/events')
 def get_events():
     """Get events for a specific month or date"""
-    month = request.args.get('month')
-    year = request.args.get('year')
-    date_param = request.args.get('date')
-    
-    conn = get_db_connection()
-    
-    if date_param:
-        # Get events for specific date with category info
-        cursor = conn.execute('''
-            SELECT e.*, c.name as category_name, c.color as category_color 
-            FROM events e 
-            LEFT JOIN categories c ON e.category_id = c.id 
-            WHERE DATE(e.start_datetime) = ? 
-            ORDER BY e.start_datetime
-        ''', (date_param,))
-    elif month and year:
-        # Get events for specific month with category info
-        cursor = conn.execute('''
-            SELECT e.*, c.name as category_name, c.color as category_color 
-            FROM events e 
-            LEFT JOIN categories c ON e.category_id = c.id 
-            WHERE strftime("%m", e.start_datetime) = ? AND strftime("%Y", e.start_datetime) = ? 
-            ORDER BY e.start_datetime
-        ''', (month.zfill(2), year))
-    else:
-        # Get all events with category info
-        cursor = conn.execute('''
-            SELECT e.*, c.name as category_name, c.color as category_color 
-            FROM events e 
-            LEFT JOIN categories c ON e.category_id = c.id 
-            ORDER BY e.start_datetime
-        ''')
-    
-    events = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    return jsonify(events)
+    try:
+        # Initialize database if it doesn't exist
+        init_db()
+        
+        month = request.args.get('month')
+        year = request.args.get('year')
+        date_param = request.args.get('date')
+        
+        conn = get_db_connection()
+        
+        if date_param:
+            # Get events for specific date with category info
+            cursor = conn.execute('''
+                SELECT e.*, c.name as category_name, c.color as category_color 
+                FROM events e 
+                LEFT JOIN categories c ON e.category_id = c.id 
+                WHERE DATE(e.start_datetime) = ? 
+                ORDER BY e.start_datetime
+            ''', (date_param,))
+        elif month and year:
+            # Get events for specific month with category info
+            cursor = conn.execute('''
+                SELECT e.*, c.name as category_name, c.color as category_color 
+                FROM events e 
+                LEFT JOIN categories c ON e.category_id = c.id 
+                WHERE strftime("%m", e.start_datetime) = ? AND strftime("%Y", e.start_datetime) = ? 
+                ORDER BY e.start_datetime
+            ''', (month.zfill(2), year))
+        else:
+            # Get all events with category info
+            cursor = conn.execute('''
+                SELECT e.*, c.name as category_name, c.color as category_color 
+                FROM events e 
+                LEFT JOIN categories c ON e.category_id = c.id 
+                ORDER BY e.start_datetime
+            ''')
+        
+        events = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify(events)
+        
+    except Exception as e:
+        app.logger.error(f"Error in get_events: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/events', methods=['POST'])
 @login_required
