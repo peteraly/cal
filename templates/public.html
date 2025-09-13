@@ -201,23 +201,79 @@
             </div>
             
             <!-- Mapbox Map Container -->
-            <div id="map" class="w-full h-64 rounded-lg mb-4"></div>
+            <div id="map" class="w-full h-96 rounded-lg mb-4 shadow-lg"></div>
             
-            <!-- Events with Locations List -->
-            <div class="space-y-2">
-                <template x-for="event in eventsWithLocations" :key="event.id">
-                    <div class="border border-gray-200 rounded-lg p-3">
-                        <div class="flex items-start justify-between">
-                            <div class="flex-1 min-w-0">
-                                <div class="text-sm font-medium text-gray-900 mb-1" x-text="event.title"></div>
-                                <div class="text-xs text-gray-500 mb-1" x-text="event.location"></div>
-                                <div class="text-xs text-gray-400" x-text="formatDate(event.start_datetime) + ' at ' + formatTime(event.start_datetime)"></div>
-                            </div>
-                        </div>
+            <!-- Event Carousel -->
+            <div x-show="eventsWithLocations.length > 0" class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-medium text-gray-800">Events on Map</h3>
+                    <div class="flex items-center space-x-2">
+                        <button @click="toggleCarousel()" 
+                                class="p-1 hover:bg-gray-100 rounded touch-manipulation">
+                            <svg x-show="!carouselPaused" class="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                            </svg>
+                            <svg x-show="carouselPaused" class="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        </button>
+                        <span class="text-xs text-gray-500" x-text="`${carouselIndex + 1}/${eventsWithLocations.length}`"></span>
                     </div>
-                </template>
+                </div>
+                
+                <!-- Carousel Container -->
+                <div class="relative overflow-hidden rounded-lg bg-gray-50">
+                    <div class="flex transition-transform duration-500 ease-in-out"
+                         :style="`transform: translateX(-${carouselIndex * 100}%)`">
+                        <template x-for="(event, index) in eventsWithLocations" :key="event.id">
+                            <div class="w-full flex-shrink-0 p-4">
+                                <div @click="highlightEventOnMap(event, index)"
+                                     :class="{'ring-2 ring-blue-500 bg-blue-50': highlightedEventId === event.id, 'bg-white': highlightedEventId !== event.id}"
+                                     class="rounded-lg shadow-sm border border-gray-200 p-4 cursor-pointer transition-all duration-200 hover:shadow-md">
+                                    <div class="flex items-start space-x-3">
+                                        <!-- Event Icon -->
+                                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                        </div>
+                                        
+                                        <!-- Event Details -->
+                                        <div class="flex-1 min-w-0">
+                                            <h4 class="text-sm font-semibold text-gray-900 mb-1" x-text="event.title"></h4>
+                                            <div class="flex items-center text-xs text-gray-500 mb-1">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                                </svg>
+                                                <span x-text="event.location"></span>
+                                            </div>
+                                            <div class="flex items-center text-xs text-gray-400">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                </svg>
+                                                <span x-text="formatDate(event.start_datetime) + ' at ' + formatTime(event.start_datetime)"></span>
+                                            </div>
+                                            <div x-show="event.description" class="mt-2 text-xs text-gray-600 line-clamp-2" x-text="event.description"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Carousel Indicators -->
+                    <div class="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                        <template x-for="(event, index) in eventsWithLocations" :key="event.id">
+                            <button @click="carouselIndex = index"
+                                    :class="index === carouselIndex ? 'bg-blue-500' : 'bg-gray-300'"
+                                    class="w-2 h-2 rounded-full transition-colors duration-200"></button>
+                        </template>
+                    </div>
+                </div>
             </div>
             
+            <!-- No Events Message -->
             <div x-show="eventsWithLocations.length === 0" class="text-center py-12">
                 <div class="text-gray-400 text-4xl mb-4">📍</div>
                 <p class="text-gray-500">No events with locations</p>
@@ -297,6 +353,11 @@ function publicApp() {
         showNoEventsMessage: false,
         showErrorMessage: false,
         map: null,
+        carouselIndex: 0,
+        carouselPaused: false,
+        carouselInterval: null,
+        highlightedEventId: null,
+        eventMarkers: [],
         
         get sortedEvents() {
             return this.events.sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
@@ -403,12 +464,13 @@ function publicApp() {
                 container: 'map',
                 style: 'mapbox://styles/mapbox/streets-v11',
                 center: [-74.006, 40.7128], // Default to NYC, will be updated based on events
-                zoom: 10
+                zoom: 12
             });
             
             // Add event markers when map loads
             this.map.on('load', () => {
                 this.addEventMarkers();
+                this.startCarousel();
             });
         },
         
@@ -416,32 +478,54 @@ function publicApp() {
             if (!this.map) return;
             
             // Clear existing markers
-            document.querySelectorAll('.mapboxgl-marker').forEach(marker => marker.remove());
+            this.eventMarkers.forEach(marker => marker.remove());
+            this.eventMarkers = [];
             
             // Add markers for events with locations
-            this.eventsWithLocations.forEach(event => {
+            this.eventsWithLocations.forEach((event, index) => {
                 // For demo purposes, use random coordinates if no real coordinates
                 const coordinates = this.getEventCoordinates(event);
                 
-                const marker = new mapboxgl.Marker()
+                // Create custom marker element
+                const markerElement = document.createElement('div');
+                markerElement.className = 'custom-marker';
+                markerElement.innerHTML = `
+                    <div class="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform duration-200">
+                        <div class="w-2 h-2 bg-white rounded-full"></div>
+                    </div>
+                `;
+                
+                const marker = new mapboxgl.Marker(markerElement)
                     .setLngLat(coordinates)
-                    .setPopup(new mapboxgl.Popup().setHTML(`
-                        <div class="p-2">
-                            <h3 class="font-semibold text-sm">${event.title}</h3>
-                            <p class="text-xs text-gray-600">${event.location}</p>
+                    .setPopup(new mapboxgl.Popup({
+                        offset: 25,
+                        closeButton: false,
+                        closeOnClick: false
+                    }).setHTML(`
+                        <div class="p-3 min-w-48">
+                            <h3 class="font-semibold text-sm text-gray-900 mb-1">${event.title}</h3>
+                            <p class="text-xs text-gray-600 mb-1">${event.location}</p>
                             <p class="text-xs text-gray-500">${this.formatDate(event.start_datetime)} at ${this.formatTime(event.start_datetime)}</p>
                         </div>
-                    `))
-                    .addTo(this.map);
+                    `));
+                
+                // Add click event to marker
+                markerElement.addEventListener('click', () => {
+                    this.zoomToEvent(event, coordinates);
+                    this.highlightEventInCarousel(event, index);
+                });
+                
+                marker.addTo(this.map);
+                this.eventMarkers.push(marker);
             });
             
-            // Fit map to show all markers
+            // Fit map to show all markers with better padding
             if (this.eventsWithLocations.length > 0) {
                 const bounds = new mapboxgl.LngLatBounds();
                 this.eventsWithLocations.forEach(event => {
                     bounds.extend(this.getEventCoordinates(event));
                 });
-                this.map.fitBounds(bounds, { padding: 50 });
+                this.map.fitBounds(bounds, { padding: 80 });
             }
         },
         
@@ -453,6 +537,78 @@ function publicApp() {
             const lat = baseLat + (Math.random() - 0.5) * 0.1;
             const lng = baseLng + (Math.random() - 0.5) * 0.1;
             return [lng, lat];
+        },
+        
+        startCarousel() {
+            if (this.carouselInterval) {
+                clearInterval(this.carouselInterval);
+            }
+            
+            this.carouselInterval = setInterval(() => {
+                if (!this.carouselPaused && this.eventsWithLocations.length > 0) {
+                    this.carouselIndex = (this.carouselIndex + 1) % this.eventsWithLocations.length;
+                }
+            }, 3000); // Auto-advance every 3 seconds
+        },
+        
+        stopCarousel() {
+            if (this.carouselInterval) {
+                clearInterval(this.carouselInterval);
+                this.carouselInterval = null;
+            }
+        },
+        
+        toggleCarousel() {
+            this.carouselPaused = !this.carouselPaused;
+        },
+        
+        zoomToEvent(event, coordinates) {
+            if (!this.map) return;
+            
+            // Zoom to the event location
+            this.map.flyTo({
+                center: coordinates,
+                zoom: 16,
+                duration: 1000
+            });
+            
+            // Highlight the event
+            this.highlightedEventId = event.id;
+            
+            // Clear highlight after 3 seconds
+            setTimeout(() => {
+                this.highlightedEventId = null;
+            }, 3000);
+        },
+        
+        highlightEventOnMap(event, index) {
+            // Update carousel to show this event
+            this.carouselIndex = index;
+            
+            // Highlight the event
+            this.highlightedEventId = event.id;
+            
+            // Zoom to the event on the map
+            const coordinates = this.getEventCoordinates(event);
+            this.zoomToEvent(event, coordinates);
+            
+            // Clear highlight after 3 seconds
+            setTimeout(() => {
+                this.highlightedEventId = null;
+            }, 3000);
+        },
+        
+        highlightEventInCarousel(event, index) {
+            // Update carousel to show this event
+            this.carouselIndex = index;
+            
+            // Highlight the event
+            this.highlightedEventId = event.id;
+            
+            // Clear highlight after 3 seconds
+            setTimeout(() => {
+                this.highlightedEventId = null;
+            }, 3000);
         },
         
         scrollToDateEvents(date) {
@@ -563,13 +719,21 @@ function publicApp() {
         init() {
             this.loadEvents();
             
-            // Watch for tab changes to initialize map
+            // Watch for tab changes to initialize map and manage carousel
             this.$watch('activeTab', (newTab) => {
                 if (newTab === 'map') {
                     this.$nextTick(() => {
                         this.initializeMap();
                     });
+                } else {
+                    // Stop carousel when leaving map tab
+                    this.stopCarousel();
                 }
+            });
+            
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', () => {
+                this.stopCarousel();
             });
         }
     }
