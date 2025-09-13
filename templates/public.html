@@ -208,8 +208,8 @@
                 <p class="text-sm text-gray-600">Tap pins to view event details</p>
             </div>
             
-            <!-- Mapbox Map Container -->
-            <div id="map" class="w-full h-96 rounded-lg mb-4 shadow-lg"></div>
+            <!-- Mapbox Map Container (Full-Screen) -->
+            <div id="map" class="w-full h-[calc(100vh-200px)] rounded-lg mb-4 shadow-lg"></div>
             
             <!-- Event Carousel -->
             <div x-show="eventsWithLocations.length > 0" class="mb-4">
@@ -358,6 +358,7 @@ function publicApp() {
         carouselInterval: null,
         highlightedEventId: null,
         eventMarkers: [],
+        currentPopup: null,
         
         get sortedEvents() {
             return this.events.sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
@@ -503,24 +504,54 @@ function publicApp() {
                     </div>
                 `;
                 
+                const popup = new mapboxgl.Popup({
+                    offset: 25,
+                    closeButton: true,
+                    closeOnClick: false,
+                    className: 'custom-popup'
+                }).setHTML(`
+                    <div class="p-4 min-w-56 max-w-72">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-semibold text-sm text-gray-900 pr-2">${event.title}</h3>
+                            <button onclick="this.closest('.mapboxgl-popup').remove()" 
+                                    class="text-gray-400 hover:text-gray-600 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex items-center text-xs text-gray-600">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                <span>${event.location}</span>
+                            </div>
+                            <div class="flex items-center text-xs text-gray-500">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                <span>${this.formatDate(event.start_datetime)}</span>
+                            </div>
+                            <div class="flex items-center text-xs text-gray-500">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span>${this.formatTime(event.start_datetime)}</span>
+                            </div>
+                            ${event.description ? `<p class="text-xs text-gray-600 mt-2 line-clamp-2">${event.description}</p>` : ''}
+                        </div>
+                    </div>
+                `);
+                
                 const marker = new mapboxgl.Marker(markerElement)
                     .setLngLat(coordinates)
-                    .setPopup(new mapboxgl.Popup({
-                        offset: 25,
-                        closeButton: false,
-                        closeOnClick: false
-                    }).setHTML(`
-                        <div class="p-3 min-w-48">
-                            <h3 class="font-semibold text-sm text-gray-900 mb-1">${event.title}</h3>
-                            <p class="text-xs text-gray-600 mb-1">${event.location}</p>
-                            <p class="text-xs text-gray-500">${this.formatDate(event.start_datetime)} at ${this.formatTime(event.start_datetime)}</p>
-                        </div>
-                    `));
+                    .setPopup(popup);
                 
                 // Add click event to marker
                 markerElement.addEventListener('click', () => {
-                    this.zoomToEvent(event, coordinates);
-                    this.highlightEventInCarousel(event, index);
+                    this.showSinglePopup(marker, event, index);
                 });
                 
                 marker.addTo(this.map);
@@ -570,23 +601,18 @@ function publicApp() {
             this.carouselPaused = !this.carouselPaused;
         },
         
-        zoomToEvent(event, coordinates) {
-            if (!this.map) return;
+        showSinglePopup(marker, event, index) {
+            // Close any existing popup
+            if (this.currentPopup) {
+                this.currentPopup.remove();
+            }
             
-            // Zoom to the event location
-            this.map.flyTo({
-                center: coordinates,
-                zoom: 16,
-                duration: 1000
-            });
+            // Open the new popup
+            marker.togglePopup();
+            this.currentPopup = marker.getPopup();
             
-            // Highlight the event
-            this.highlightedEventId = event.id;
-            
-            // Clear highlight after 3 seconds
-            setTimeout(() => {
-                this.highlightedEventId = null;
-            }, 3000);
+            // Highlight the event in carousel
+            this.highlightEventInCarousel(event, index);
         },
         
         highlightEventOnMap(event, index) {
@@ -596,9 +622,11 @@ function publicApp() {
             // Highlight the event
             this.highlightedEventId = event.id;
             
-            // Zoom to the event on the map
-            const coordinates = this.getEventCoordinates(event);
-            this.zoomToEvent(event, coordinates);
+            // Find and show the corresponding marker popup
+            const marker = this.eventMarkers[index];
+            if (marker) {
+                this.showSinglePopup(marker, event, index);
+            }
             
             // Clear highlight after 3 seconds
             setTimeout(() => {
