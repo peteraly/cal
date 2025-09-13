@@ -19,19 +19,30 @@
             
             <!-- Calendar Grid (Top Half) -->
             <div class="mb-6">
-                <div class="flex justify-between items-center mb-4">
-                    <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                        </svg>
-                    </button>
-                    <h2 class="text-lg font-semibold text-gray-800" x-text="currentMonthYear"></h2>
-                    <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
-                </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                        </button>
+                        <div class="flex items-center space-x-3">
+                            <h2 class="text-lg font-semibold text-gray-800" x-text="currentMonthYear"></h2>
+                            <!-- Clear Filter Control -->
+                            <button x-show="selectedDate" 
+                                    @click="clearDateFilter()"
+                                    class="flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200 touch-manipulation">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                                <span>All Events</span>
+                            </button>
+                        </div>
+                        <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
                 
                 <!-- Calendar Grid -->
                 <div class="grid grid-cols-7 gap-1 mb-2">
@@ -66,10 +77,21 @@
             
             <!-- Events List Header -->
             <div class="mb-4">
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">
-                    <span x-show="!selectedDate">All Events</span>
-                    <span x-show="selectedDate" x-text="`Events for ${formatSelectedDate()}`"></span>
-                </h3>
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <span x-show="!selectedDate">All Events</span>
+                        <span x-show="selectedDate" x-text="`Events for ${formatSelectedDate()}`"></span>
+                    </h3>
+                    <!-- Clear Filter Control -->
+                    <button x-show="selectedDate" 
+                            @click="clearDateFilter()"
+                            class="clear-filter-btn flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700 touch-manipulation px-3 py-1.5 rounded-full">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        <span>All Events</span>
+                    </button>
+                </div>
                 <p class="text-sm text-gray-600" x-text="getFilteredEventsText()"></p>
             </div>
             
@@ -117,7 +139,7 @@
             </div>
             
             <!-- Events List (Bottom Half) -->
-            <div x-show="!loading" class="relative events-container">
+            <div x-show="!loading" class="relative events-container" x-ref="eventsContainer">
                 <!-- Scrollable Events Container -->
                 <div class="space-y-4 pb-8">
                     <template x-for="event in filteredEvents" :key="event.id">
@@ -486,6 +508,20 @@ function publicApp() {
             // Scroll to events for this date
             this.$nextTick(() => {
                 this.scrollToDateEvents(date);
+            });
+        },
+        
+        clearDateFilter() {
+            this.selectedDate = null;
+            // Smooth scroll to top of events list
+            this.$nextTick(() => {
+                const eventsContainer = this.$refs.eventsContainer;
+                if (eventsContainer) {
+                    eventsContainer.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                }
             });
         },
         
