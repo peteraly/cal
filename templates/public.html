@@ -7,8 +7,8 @@
     <!-- Main Content Area -->
     <div class="max-w-md mx-auto bg-white min-h-screen">
         
-        <!-- Rolodex View (Default) -->
-        <div x-show="activeTab === 'rolodex'" 
+        <!-- Combined Events View (Default) -->
+        <div x-show="activeTab === 'events'" 
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="opacity-0 transform translate-x-4"
              x-transition:enter-end="opacity-100 transform translate-x-0"
@@ -16,9 +16,61 @@
              x-transition:leave-start="opacity-100 transform translate-x-0"
              x-transition:leave-end="opacity-0 transform translate-x-4"
              class="p-4">
+            
+            <!-- Calendar Grid (Top Half) -->
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <h2 class="text-lg font-semibold text-gray-800" x-text="currentMonthYear"></h2>
+                    <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Calendar Grid -->
+                <div class="grid grid-cols-7 gap-1 mb-2">
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">M</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">W</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">F</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
+                </div>
+                
+                <div class="grid grid-cols-7 gap-1">
+                    <template x-for="day in calendarDays" :key="day.date">
+                        <button @click="selectDate(day.date)"
+                                :class="{
+                                    'bg-blue-500 text-white shadow-md': day.isSelected,
+                                    'bg-gray-100 hover:bg-gray-200': !day.isSelected && day.isCurrentMonth,
+                                    'text-gray-400': !day.isCurrentMonth,
+                                    'text-gray-800': day.isCurrentMonth && !day.isSelected
+                                }"
+                                class="w-full h-10 rounded-lg text-sm font-medium transition-all duration-200 relative touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                                :disabled="!day.isCurrentMonth">
+                            <span x-text="day.dayNumber"></span>
+                            <div x-show="day.hasEvents" 
+                                 class="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                                 :class="day.isSelected ? 'bg-white' : 'bg-blue-500'"></div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+            
+            <!-- Events List Header -->
             <div class="mb-4">
-                <h1 class="text-xl font-semibold text-gray-800 mb-2">Events</h1>
-                <p class="text-sm text-gray-600" x-text="getDateRangeText()"></p>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                    <span x-show="!selectedDate">All Events</span>
+                    <span x-show="selectedDate" x-text="`Events for ${formatSelectedDate()}`"></span>
+                </h3>
+                <p class="text-sm text-gray-600" x-text="getFilteredEventsText()"></p>
             </div>
             
             <!-- Loading State -->
@@ -64,9 +116,9 @@
                 </div>
             </div>
             
-            <!-- Events List -->
+            <!-- Events List (Bottom Half) -->
             <div x-show="!loading" class="space-y-2">
-                <template x-for="event in sortedEvents" :key="event.id">
+                <template x-for="event in filteredEvents" :key="event.id">
                     <div class="border-b border-gray-100 pb-2" 
                          :data-event-id="event.id"
                          :data-event-date="event.start_datetime.split('T')[0]">
@@ -123,68 +175,24 @@
                 </template>
             </div>
             
-            <!-- Empty State -->
-            <div x-show="!loading && sortedEvents.length === 0" class="text-center py-12">
+            <!-- No Events Message for Selected Date -->
+            <div x-show="selectedDate && filteredEvents.length === 0" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform scale-95"
+                 x-transition:enter-end="opacity-100 transform scale-100"
+                 class="text-center py-12">
+                <div class="text-gray-400 text-4xl mb-4">📅</div>
+                <p class="text-gray-500 mb-2">No events scheduled for this day</p>
+                <p class="text-gray-400 text-sm" x-text="formatSelectedDate()"></p>
+            </div>
+            
+            <!-- Empty State (No events at all) -->
+            <div x-show="!loading && !selectedDate && sortedEvents.length === 0" class="text-center py-12">
                 <div class="text-gray-400 text-4xl mb-4">📄</div>
                 <p class="text-gray-500">No events found</p>
             </div>
         </div>
         
-        <!-- Calendar View -->
-        <div x-show="activeTab === 'calendar'" 
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0 transform translate-x-4"
-             x-transition:enter-end="opacity-100 transform translate-x-0"
-             x-transition:leave="transition ease-in duration-200"
-             x-transition:leave-start="opacity-100 transform translate-x-0"
-             x-transition:leave-end="opacity-0 transform translate-x-4"
-             class="p-4">
-            <div class="mb-4">
-                <div class="flex justify-between items-center mb-4">
-                    <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                        </svg>
-                    </button>
-                    <h2 class="text-xl font-semibold text-gray-800" x-text="currentMonthYear"></h2>
-                    <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
-                </div>
-                
-                <!-- Calendar Grid -->
-                <div class="grid grid-cols-7 gap-1 mb-2">
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">M</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">W</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">F</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
-                </div>
-                
-                <div class="grid grid-cols-7 gap-1">
-                    <template x-for="day in calendarDays" :key="day.date">
-                        <button @click="selectDate(day.date)"
-                                :class="{
-                                    'bg-blue-500 text-white shadow-md': day.isSelected,
-                                    'bg-gray-100 hover:bg-gray-200': !day.isSelected && day.isCurrentMonth,
-                                    'text-gray-400': !day.isCurrentMonth,
-                                    'text-gray-800': day.isCurrentMonth && !day.isSelected
-                                }"
-                                class="w-full h-10 rounded-lg text-sm font-medium transition-all duration-200 relative touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                                :disabled="!day.isCurrentMonth">
-                            <span x-text="day.dayNumber"></span>
-                            <div x-show="day.hasEvents" 
-                                 class="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full"
-                                 :class="day.isSelected ? 'bg-white' : 'bg-blue-500'"></div>
-                        </button>
-                    </template>
-                </div>
-            </div>
-        </div>
         
         <!-- Map View -->
         <div x-show="activeTab === 'map'" 
@@ -304,21 +312,13 @@
     <!-- Bottom Navigation -->
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <div class="max-w-md mx-auto">
-            <div class="grid grid-cols-4">
-                <!-- Rolodex Tab -->
-                <button @click="activeTab = 'rolodex'" 
-                        :class="activeTab === 'rolodex' ? 'text-blue-600' : 'text-gray-400'"
+            <div class="grid grid-cols-3">
+                <!-- Events Tab (Combined Calendar + List) -->
+                <button @click="activeTab = 'events'" 
+                        :class="activeTab === 'events' ? 'text-blue-600' : 'text-gray-400'"
                         class="flex flex-col items-center py-3 touch-manipulation">
-                    <div class="text-xl mb-1">📄</div>
+                    <div class="text-xl mb-1">📅</div>
                     <div class="text-xs font-medium">Events</div>
-                </button>
-                
-                <!-- Calendar Tab -->
-                <button @click="activeTab = 'calendar'" 
-                        :class="activeTab === 'calendar' ? 'text-blue-600' : 'text-gray-400'"
-                        class="flex flex-col items-center py-3 touch-manipulation">
-                    <div class="text-xl mb-1">🗓️</div>
-                    <div class="text-xs font-medium">Calendar</div>
                 </button>
                 
                 <!-- Map Tab -->
@@ -344,7 +344,7 @@
 <script>
 function publicApp() {
     return {
-        activeTab: 'rolodex',
+        activeTab: 'events',
         events: [],
         loading: false,
         expandedEvents: [],
@@ -361,6 +361,15 @@ function publicApp() {
         
         get sortedEvents() {
             return this.events.sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
+        },
+        
+        get filteredEvents() {
+            if (!this.selectedDate) {
+                return this.sortedEvents;
+            }
+            return this.sortedEvents.filter(event => 
+                event.start_datetime.startsWith(this.selectedDate)
+            );
         },
         
         get eventsWithLocations() {
@@ -447,9 +456,8 @@ function publicApp() {
         
         selectDate(date) {
             this.selectedDate = date;
-            this.activeTab = 'rolodex';
             
-            // Scroll to events for this date after view switch
+            // Scroll to events for this date
             this.$nextTick(() => {
                 this.scrollToDateEvents(date);
             });
@@ -710,10 +718,18 @@ function publicApp() {
             const date = new Date(this.selectedDate);
             return date.toLocaleDateString('en-US', { 
                 weekday: 'long',
-                month: 'long', 
+                month: 'long',
                 day: 'numeric',
                 year: 'numeric'
             });
+        },
+        
+        getFilteredEventsText() {
+            if (!this.selectedDate) {
+                return `${this.sortedEvents.length} events total`;
+            }
+            const count = this.filteredEvents.length;
+            return count === 1 ? '1 event' : `${count} events`;
         },
         
         init() {

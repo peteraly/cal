@@ -33,15 +33,10 @@
         <!-- Tab Navigation -->
         <div class="border-b border-gray-200">
             <div class="flex">
-                <button @click="activeTab = 'rolodex'" 
-                        :class="{'border-blue-500 text-blue-600': activeTab === 'rolodex', 'border-transparent text-gray-500': activeTab !== 'rolodex'}"
+                <button @click="activeTab = 'events'" 
+                        :class="{'border-blue-500 text-blue-600': activeTab === 'events', 'border-transparent text-gray-500': activeTab !== 'events'}"
                         class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
-                    📄 Events
-                </button>
-                <button @click="activeTab = 'calendar'" 
-                        :class="{'border-blue-500 text-blue-600': activeTab === 'calendar', 'border-transparent text-gray-500': activeTab !== 'calendar'}"
-                        class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
-                    🗓️ Calendar
+                    📅 Events
                 </button>
                 <button @click="activeTab = 'map'" 
                         :class="{'border-blue-500 text-blue-600': activeTab === 'map', 'border-transparent text-gray-500': activeTab !== 'map'}"
@@ -58,8 +53,8 @@
         
         <!-- Tab Content -->
         <div class="flex-1 overflow-y-auto">
-            <!-- Rolodex View (Default) -->
-            <div x-show="activeTab === 'rolodex'" class="p-4">
+            <!-- Events View (Default) -->
+            <div x-show="activeTab === 'events'" class="p-4">
                 <div class="mb-4">
                     <h2 class="text-lg font-semibold text-gray-800 mb-2">All Events</h2>
                     <p class="text-sm text-gray-600" x-text="`${events.length} events total`"></p>
@@ -389,7 +384,7 @@ function adminApp() {
         showBulkImportModal: false,
         editingEventId: null,
         saving: false,
-        activeTab: 'rolodex',
+        activeTab: 'events',
         currentDate: new Date(),
         selectedDate: null,
         bulkImportText: '',
