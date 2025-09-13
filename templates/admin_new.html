@@ -33,10 +33,20 @@
         <!-- Tab Navigation -->
         <div class="border-b border-gray-200">
             <div class="flex">
-                <button @click="activeTab = 'home'" 
-                        :class="{'border-blue-500 text-blue-600': activeTab === 'home', 'border-transparent text-gray-500': activeTab !== 'home'}"
+                <button @click="activeTab = 'rolodex'" 
+                        :class="{'border-blue-500 text-blue-600': activeTab === 'rolodex', 'border-transparent text-gray-500': activeTab !== 'rolodex'}"
                         class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
-                    🏠 Home
+                    📄 Events
+                </button>
+                <button @click="activeTab = 'calendar'" 
+                        :class="{'border-blue-500 text-blue-600': activeTab === 'calendar', 'border-transparent text-gray-500': activeTab !== 'calendar'}"
+                        class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
+                    🗓️ Calendar
+                </button>
+                <button @click="activeTab = 'map'" 
+                        :class="{'border-blue-500 text-blue-600': activeTab === 'map', 'border-transparent text-gray-500': activeTab !== 'map'}"
+                        class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
+                    📍 Map
                 </button>
                 <button @click="activeTab = 'feed'" 
                         :class="{'border-blue-500 text-blue-600': activeTab === 'feed', 'border-transparent text-gray-500': activeTab !== 'feed'}"
@@ -48,8 +58,8 @@
         
         <!-- Tab Content -->
         <div class="flex-1 overflow-y-auto">
-            <!-- Home View (Default) -->
-            <div x-show="activeTab === 'home'" class="p-4">
+            <!-- Rolodex View (Default) -->
+            <div x-show="activeTab === 'rolodex'" class="p-4">
                 <div class="mb-4">
                     <h2 class="text-lg font-semibold text-gray-800 mb-2">All Events</h2>
                     <p class="text-sm text-gray-600" x-text="`${events.length} events total`"></p>
@@ -379,7 +389,7 @@ function adminApp() {
         showBulkImportModal: false,
         editingEventId: null,
         saving: false,
-        activeTab: 'home',
+        activeTab: 'rolodex',
         currentDate: new Date(),
         selectedDate: null,
         bulkImportText: '',

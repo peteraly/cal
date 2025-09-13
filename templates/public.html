@@ -7,8 +7,8 @@
     <!-- Main Content Area -->
     <div class="max-w-md mx-auto bg-white min-h-screen">
         
-        <!-- Home View (Default) - Rolodex with Toggleable Calendar & Map -->
-        <div x-show="activeTab === 'home'" 
+        <!-- Rolodex View (Default) -->
+        <div x-show="activeTab === 'rolodex'" 
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="opacity-0 transform translate-x-4"
              x-transition:enter-end="opacity-100 transform translate-x-0"
@@ -16,31 +16,8 @@
              x-transition:leave-start="opacity-100 transform translate-x-0"
              x-transition:leave-end="opacity-0 transform translate-x-4"
              class="p-4">
-            
-            <!-- Header with Toggle Buttons -->
             <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h1 class="text-xl font-semibold text-gray-800">Events</h1>
-                    <div class="flex space-x-2">
-                        <!-- Calendar Toggle -->
-                        <button @click="toggleCalendar()" 
-                                :class="{'bg-blue-100 text-blue-600': showCalendar, 'bg-gray-100 text-gray-600': !showCalendar}"
-                                class="p-2 rounded-lg transition-colors touch-manipulation">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                        </button>
-                        <!-- Map Toggle -->
-                        <button @click="toggleMap()" 
-                                :class="{'bg-blue-100 text-blue-600': showMap, 'bg-gray-100 text-gray-600': !showMap}"
-                                class="p-2 rounded-lg transition-colors touch-manipulation">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                <h1 class="text-xl font-semibold text-gray-800 mb-2">Events</h1>
                 <p class="text-sm text-gray-600" x-text="getDateRangeText()"></p>
             </div>
             
@@ -68,99 +45,6 @@
                 </div>
             </div>
             
-            <!-- Collapsible Calendar -->
-            <div x-show="showCalendar" 
-                 x-transition:enter="transition ease-out duration-300"
-                 x-transition:enter-start="opacity-0 transform -translate-y-2"
-                 x-transition:enter-end="opacity-100 transform translate-y-0"
-                 x-transition:leave="transition ease-in duration-200"
-                 x-transition:leave-start="opacity-100 transform translate-y-0"
-                 x-transition:leave-end="opacity-0 transform -translate-y-2"
-                 class="mb-4 bg-white border border-gray-200 rounded-lg p-4">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-medium text-gray-800">Calendar</h3>
-                    <div class="flex space-x-1">
-                        <button @click="previousMonth()" class="p-1 hover:bg-gray-100 rounded touch-manipulation">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                            </svg>
-                        </button>
-                        <button @click="nextMonth()" class="p-1 hover:bg-gray-100 rounded touch-manipulation">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="text-center text-xs font-medium text-gray-500 mb-2" x-text="currentMonthYear"></div>
-                
-                <!-- Calendar Grid -->
-                <div class="grid grid-cols-7 gap-1 mb-2">
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">S</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">M</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">T</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">W</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">T</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">F</div>
-                    <div class="text-center text-xs font-medium text-gray-500 py-1">S</div>
-                </div>
-                
-                <div class="grid grid-cols-7 gap-1">
-                    <template x-for="day in calendarDays" :key="day.date">
-                        <button @click="selectDate(day.date)"
-                                :class="{
-                                    'bg-blue-500 text-white shadow-md': day.isSelected,
-                                    'bg-gray-100 hover:bg-gray-200': !day.isSelected && day.isCurrentMonth,
-                                    'text-gray-400': !day.isCurrentMonth,
-                                    'text-gray-800': day.isCurrentMonth && !day.isSelected
-                                }"
-                                class="w-full h-8 rounded text-xs font-medium transition-all duration-200 relative touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                                :disabled="!day.isCurrentMonth">
-                            <span x-text="day.dayNumber"></span>
-                            <div x-show="day.hasEvents" 
-                                 class="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1 h-1 rounded-full"
-                                 :class="day.isSelected ? 'bg-white' : 'bg-blue-500'"></div>
-                        </button>
-                    </template>
-                </div>
-            </div>
-            
-            <!-- Collapsible Map -->
-            <div x-show="showMap" 
-                 x-transition:enter="transition ease-out duration-300"
-                 x-transition:enter-start="opacity-0 transform -translate-y-2"
-                 x-transition:enter-end="opacity-100 transform translate-y-0"
-                 x-transition:leave="transition ease-in duration-200"
-                 x-transition:leave-start="opacity-100 transform translate-y-0"
-                 x-transition:leave-end="opacity-0 transform -translate-y-2"
-                 class="mb-4 bg-white border border-gray-200 rounded-lg p-4">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-medium text-gray-800">Map</h3>
-                    <span class="text-xs text-gray-500" x-text="`${eventsWithLocations.length} events with locations`"></span>
-                </div>
-                
-                <!-- Map Placeholder -->
-                <div class="bg-gray-100 rounded-lg h-32 flex items-center justify-center mb-3">
-                    <div class="text-center">
-                        <div class="text-gray-400 text-2xl mb-1">🗺️</div>
-                        <p class="text-gray-500 text-xs">Interactive map coming soon</p>
-                    </div>
-                </div>
-                
-                <!-- Events with Locations List -->
-                <div class="space-y-2 max-h-32 overflow-y-auto">
-                    <template x-for="event in eventsWithLocations.slice(0, 3)" :key="event.id">
-                        <div class="flex items-center space-x-2 text-xs">
-                            <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <span class="text-gray-800 truncate" x-text="event.title"></span>
-                            <span class="text-gray-500 truncate" x-text="event.location"></span>
-                        </div>
-                    </template>
-                    <div x-show="eventsWithLocations.length > 3" class="text-xs text-gray-500 text-center">
-                        +<span x-text="eventsWithLocations.length - 3"></span> more events
-                    </div>
-                </div>
-            </div>
             
             <!-- No Events Message -->
             <div x-show="showNoEventsMessage" 
@@ -246,7 +130,99 @@
             </div>
         </div>
         
+        <!-- Calendar View -->
+        <div x-show="activeTab === 'calendar'" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 transform translate-x-4"
+             x-transition:enter-end="opacity-100 transform translate-x-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 transform translate-x-0"
+             x-transition:leave-end="opacity-0 transform translate-x-4"
+             class="p-4">
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-4">
+                    <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <h2 class="text-xl font-semibold text-gray-800" x-text="currentMonthYear"></h2>
+                    <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full touch-manipulation">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Calendar Grid -->
+                <div class="grid grid-cols-7 gap-1 mb-2">
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">M</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">W</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">F</div>
+                    <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
+                </div>
+                
+                <div class="grid grid-cols-7 gap-1">
+                    <template x-for="day in calendarDays" :key="day.date">
+                        <button @click="selectDate(day.date)"
+                                :class="{
+                                    'bg-blue-500 text-white shadow-md': day.isSelected,
+                                    'bg-gray-100 hover:bg-gray-200': !day.isSelected && day.isCurrentMonth,
+                                    'text-gray-400': !day.isCurrentMonth,
+                                    'text-gray-800': day.isCurrentMonth && !day.isSelected
+                                }"
+                                class="w-full h-10 rounded-lg text-sm font-medium transition-all duration-200 relative touch-manipulation focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                                :disabled="!day.isCurrentMonth">
+                            <span x-text="day.dayNumber"></span>
+                            <div x-show="day.hasEvents" 
+                                 class="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                                 :class="day.isSelected ? 'bg-white' : 'bg-blue-500'"></div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
         
+        <!-- Map View -->
+        <div x-show="activeTab === 'map'" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 transform translate-x-4"
+             x-transition:enter-end="opacity-100 transform translate-x-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 transform translate-x-0"
+             x-transition:leave-end="opacity-0 transform translate-x-4"
+             class="p-4">
+            <div class="mb-4">
+                <h2 class="text-xl font-semibold text-gray-800 mb-2">Event Locations</h2>
+                <p class="text-sm text-gray-600">Tap pins to view event details</p>
+            </div>
+            
+            <!-- Mapbox Map Container -->
+            <div id="map" class="w-full h-64 rounded-lg mb-4"></div>
+            
+            <!-- Events with Locations List -->
+            <div class="space-y-2">
+                <template x-for="event in eventsWithLocations" :key="event.id">
+                    <div class="border border-gray-200 rounded-lg p-3">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm font-medium text-gray-900 mb-1" x-text="event.title"></div>
+                                <div class="text-xs text-gray-500 mb-1" x-text="event.location"></div>
+                                <div class="text-xs text-gray-400" x-text="formatDate(event.start_datetime) + ' at ' + formatTime(event.start_datetime)"></div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div x-show="eventsWithLocations.length === 0" class="text-center py-12">
+                <div class="text-gray-400 text-4xl mb-4">📍</div>
+                <p class="text-gray-500">No events with locations</p>
+            </div>
+        </div>
         
         <!-- Feed/Reels View -->
         <div x-show="activeTab === 'feed'" x-transition class="p-4">
@@ -272,13 +248,29 @@
     <!-- Bottom Navigation -->
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <div class="max-w-md mx-auto">
-            <div class="grid grid-cols-2">
-                <!-- Home Tab -->
-                <button @click="activeTab = 'home'" 
-                        :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'"
+            <div class="grid grid-cols-4">
+                <!-- Rolodex Tab -->
+                <button @click="activeTab = 'rolodex'" 
+                        :class="activeTab === 'rolodex' ? 'text-blue-600' : 'text-gray-400'"
                         class="flex flex-col items-center py-3 touch-manipulation">
-                    <div class="text-xl mb-1">🏠</div>
-                    <div class="text-xs font-medium">Home</div>
+                    <div class="text-xl mb-1">📄</div>
+                    <div class="text-xs font-medium">Events</div>
+                </button>
+                
+                <!-- Calendar Tab -->
+                <button @click="activeTab = 'calendar'" 
+                        :class="activeTab === 'calendar' ? 'text-blue-600' : 'text-gray-400'"
+                        class="flex flex-col items-center py-3 touch-manipulation">
+                    <div class="text-xl mb-1">🗓️</div>
+                    <div class="text-xs font-medium">Calendar</div>
+                </button>
+                
+                <!-- Map Tab -->
+                <button @click="activeTab = 'map'" 
+                        :class="activeTab === 'map' ? 'text-blue-600' : 'text-gray-400'"
+                        class="flex flex-col items-center py-3 touch-manipulation">
+                    <div class="text-xl mb-1">📍</div>
+                    <div class="text-xs font-medium">Map</div>
                 </button>
                 
                 <!-- Feed Tab -->
@@ -296,7 +288,7 @@
 <script>
 function publicApp() {
     return {
-        activeTab: 'home',
+        activeTab: 'rolodex',
         events: [],
         loading: false,
         expandedEvents: [],
@@ -304,8 +296,7 @@ function publicApp() {
         selectedDate: null,
         showNoEventsMessage: false,
         showErrorMessage: false,
-        showCalendar: false,
-        showMap: false,
+        map: null,
         
         get sortedEvents() {
             return this.events.sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
@@ -395,27 +386,73 @@ function publicApp() {
         
         selectDate(date) {
             this.selectedDate = date;
+            this.activeTab = 'rolodex';
             
-            // Scroll to events for this date
+            // Scroll to events for this date after view switch
             this.$nextTick(() => {
                 this.scrollToDateEvents(date);
             });
         },
         
-        toggleCalendar() {
-            this.showCalendar = !this.showCalendar;
-            // Close map if calendar is opened
-            if (this.showCalendar) {
-                this.showMap = false;
+        initializeMap() {
+            if (this.map) return; // Already initialized
+            
+            mapboxgl.accessToken = 'pk.eyJ1IjoicGV0ZXJhbHkiLCJhIjoiY21lNXpuNDhwMTBqZTJwb2RicWw5YWcxaSJ9.IiIfhu1oA2ua_oUDcjlIbQ';
+            
+            this.map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/streets-v11',
+                center: [-74.006, 40.7128], // Default to NYC, will be updated based on events
+                zoom: 10
+            });
+            
+            // Add event markers when map loads
+            this.map.on('load', () => {
+                this.addEventMarkers();
+            });
+        },
+        
+        addEventMarkers() {
+            if (!this.map) return;
+            
+            // Clear existing markers
+            document.querySelectorAll('.mapboxgl-marker').forEach(marker => marker.remove());
+            
+            // Add markers for events with locations
+            this.eventsWithLocations.forEach(event => {
+                // For demo purposes, use random coordinates if no real coordinates
+                const coordinates = this.getEventCoordinates(event);
+                
+                const marker = new mapboxgl.Marker()
+                    .setLngLat(coordinates)
+                    .setPopup(new mapboxgl.Popup().setHTML(`
+                        <div class="p-2">
+                            <h3 class="font-semibold text-sm">${event.title}</h3>
+                            <p class="text-xs text-gray-600">${event.location}</p>
+                            <p class="text-xs text-gray-500">${this.formatDate(event.start_datetime)} at ${this.formatTime(event.start_datetime)}</p>
+                        </div>
+                    `))
+                    .addTo(this.map);
+            });
+            
+            // Fit map to show all markers
+            if (this.eventsWithLocations.length > 0) {
+                const bounds = new mapboxgl.LngLatBounds();
+                this.eventsWithLocations.forEach(event => {
+                    bounds.extend(this.getEventCoordinates(event));
+                });
+                this.map.fitBounds(bounds, { padding: 50 });
             }
         },
         
-        toggleMap() {
-            this.showMap = !this.showMap;
-            // Close calendar if map is opened
-            if (this.showMap) {
-                this.showCalendar = false;
-            }
+        getEventCoordinates(event) {
+            // For demo purposes, generate random coordinates around NYC
+            // In a real app, you'd geocode the location
+            const baseLat = 40.7128;
+            const baseLng = -74.006;
+            const lat = baseLat + (Math.random() - 0.5) * 0.1;
+            const lng = baseLng + (Math.random() - 0.5) * 0.1;
+            return [lng, lat];
         },
         
         scrollToDateEvents(date) {
@@ -446,11 +483,31 @@ function publicApp() {
         },
         
         previousMonth() {
+            // Store current scroll position if we're in Rolodex view
+            const rolodexScrollPosition = this.activeTab === 'rolodex' ? window.scrollY : null;
+            
             this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1);
+            
+            // Restore scroll position if we were in Rolodex view
+            if (rolodexScrollPosition !== null) {
+                this.$nextTick(() => {
+                    window.scrollTo(0, rolodexScrollPosition);
+                });
+            }
         },
         
         nextMonth() {
+            // Store current scroll position if we're in Rolodex view
+            const rolodexScrollPosition = this.activeTab === 'rolodex' ? window.scrollY : null;
+            
             this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1);
+            
+            // Restore scroll position if we were in Rolodex view
+            if (rolodexScrollPosition !== null) {
+                this.$nextTick(() => {
+                    window.scrollTo(0, rolodexScrollPosition);
+                });
+            }
         },
         
         formatTime(datetime) {
@@ -505,6 +562,15 @@ function publicApp() {
         
         init() {
             this.loadEvents();
+            
+            // Watch for tab changes to initialize map
+            this.$watch('activeTab', (newTab) => {
+                if (newTab === 'map') {
+                    this.$nextTick(() => {
+                        this.initializeMap();
+                    });
+                }
+            });
         }
     }
 }
