@@ -235,16 +235,18 @@
          x-cloak
          class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
          @click.self="closeModal()">
-        <div class="relative top-4 mx-auto p-4 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+        <div class="relative top-4 mx-auto p-4 border w-11/12 max-w-lg shadow-lg rounded-md bg-white">
             <div class="mb-4">
                 <h3 class="text-lg font-medium text-gray-900" x-text="showAddEventModal ? 'Add New Event' : 'Edit Event'"></h3>
+                <p class="text-sm text-gray-600">Fill in the event details below</p>
             </div>
             
             <form @submit.prevent="saveEvent()">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
                         <input type="text" x-model="eventForm.title" required
+                               placeholder="Enter a short, punchy name for your event"
                                class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
                     </div>
                     
@@ -263,18 +265,36 @@
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                        <input type="text" x-model="eventForm.location"
-                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <div class="space-y-2">
+                            <input type="text" x-model="eventForm.location" @input="updateLocationPreview()"
+                                   placeholder="Enter the venue or address"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                            
+                            <!-- Map Preview -->
+                            <div x-show="eventForm.location && eventForm.location.trim()" 
+                                 class="border border-gray-200 rounded-md overflow-hidden">
+                                <div class="bg-gray-50 px-3 py-2 text-xs text-gray-600 border-b">
+                                    📍 Location Preview
+                                </div>
+                                <div id="location-preview-map" class="h-32 bg-gray-100 flex items-center justify-center">
+                                    <div class="text-center text-gray-500">
+                                        <div class="text-2xl mb-1">🗺️</div>
+                                        <div class="text-xs">Map preview loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Host/Organizer</label>
                         <input type="text" x-model="eventForm.host"
+                               placeholder="Who is organizing this event?"
                                class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
                     </div>
                     
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Price Info</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Price Information</label>
                         <input type="text" x-model="eventForm.price_info" placeholder="e.g., Free, $25, Free; $25"
                                class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
                     </div>
@@ -282,6 +302,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
                         <textarea x-model="eventForm.description" rows="3"
+                                  placeholder="Provide more details about the event..."
                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"></textarea>
                     </div>
                 </div>
@@ -342,6 +363,58 @@
         </div>
     </div>
     
+    <!-- Toast Notifications -->
+    <div class="fixed top-4 right-4 z-50 space-y-2">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="toast.show" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-x-full"
+                 x-transition:enter-end="opacity-100 transform translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 transform translate-x-0"
+                 x-transition:leave-end="opacity-0 transform translate-x-full"
+                 :class="{
+                     'bg-green-50 border-green-200 text-green-800': toast.type === 'success',
+                     'bg-red-50 border-red-200 text-red-800': toast.type === 'error',
+                     'bg-blue-50 border-blue-200 text-blue-800': toast.type === 'info'
+                 }"
+                 class="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden border">
+                <div class="p-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div x-show="toast.type === 'success'" class="text-green-400">
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div x-show="toast.type === 'error'" class="text-red-400">
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div x-show="toast.type === 'info'" class="text-blue-400">
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-3 w-0 flex-1 pt-0.5">
+                            <p class="text-sm font-medium" x-text="toast.message"></p>
+                        </div>
+                        <div class="ml-4 flex-shrink-0 flex">
+                            <button @click="removeToast(toast.id)" class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                <span class="sr-only">Close</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+    
     <!-- Bottom Navigation -->
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <div class="max-w-md mx-auto">
@@ -389,6 +462,8 @@ function adminApp() {
         selectedDate: null,
         bulkImportText: '',
         extracting: false,
+        toasts: [],
+        locationPreviewMap: null,
         eventForm: {
             title: '',
             date: '',
@@ -482,12 +557,14 @@ function adminApp() {
                 if (response.ok) {
                     await this.loadEvents();
                     this.closeModal();
+                    const message = this.showAddEventModal ? 'Event created successfully!' : 'Event updated successfully!';
+                    this.showToast(message, 'success');
                 } else {
-                    alert('Error saving event');
+                    this.showToast('Error saving event. Please try again.', 'error');
                 }
             } catch (error) {
                 console.error('Error saving event:', error);
-                alert('Error saving event');
+                this.showToast('Error saving event. Please try again.', 'error');
             } finally {
                 this.saving = false;
             }
@@ -503,12 +580,13 @@ function adminApp() {
                 
                 if (response.ok) {
                     await this.loadEvents();
+                    this.showToast('Event deleted successfully!', 'success');
                 } else {
-                    alert('Error deleting event');
+                    this.showToast('Error deleting event. Please try again.', 'error');
                 }
             } catch (error) {
                 console.error('Error deleting event:', error);
-                alert('Error deleting event');
+                this.showToast('Error deleting event. Please try again.', 'error');
             }
         },
         
@@ -532,13 +610,106 @@ function adminApp() {
             this.editingEventId = null;
             this.eventForm = {
                 title: '',
-                date: '',
-                time: '',
+                date: this.getCurrentDate(),
+                time: this.getCurrentTime(),
                 location: '',
                 host: '',
                 price_info: '',
                 description: ''
             };
+            this.destroyLocationPreviewMap();
+        },
+        
+        getCurrentDate() {
+            const today = new Date();
+            return today.toISOString().split('T')[0];
+        },
+        
+        getCurrentTime() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        },
+        
+        showToast(message, type = 'info') {
+            const toast = {
+                id: Date.now(),
+                message: message,
+                type: type,
+                show: true
+            };
+            this.toasts.push(toast);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                this.removeToast(toast.id);
+            }, 5000);
+        },
+        
+        removeToast(toastId) {
+            const index = this.toasts.findIndex(t => t.id === toastId);
+            if (index > -1) {
+                this.toasts[index].show = false;
+                setTimeout(() => {
+                    this.toasts.splice(index, 1);
+                }, 200);
+            }
+        },
+        
+        updateLocationPreview() {
+            if (!this.eventForm.location || !this.eventForm.location.trim()) {
+                this.destroyLocationPreviewMap();
+                return;
+            }
+            
+            // Debounce the geocoding
+            clearTimeout(this.locationTimeout);
+            this.locationTimeout = setTimeout(() => {
+                this.geocodeAndShowLocation(this.eventForm.location);
+            }, 500);
+        },
+        
+        async geocodeAndShowLocation(address) {
+            try {
+                const response = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=pk.eyJ1IjoicGV0ZXJhbHkiLCJhIjoiY21lNXpuNDhwMTBqZTJwb2RicWw5YWcxaSJ9.IiIfhu1oA2ua_oUDcjlIbQ&limit=1`);
+                const data = await response.json();
+                
+                if (data.features && data.features.length > 0) {
+                    const coordinates = data.features[0].center;
+                    this.showLocationOnMap(coordinates, address);
+                }
+            } catch (error) {
+                console.error('Geocoding error:', error);
+            }
+        },
+        
+        showLocationOnMap(coordinates, address) {
+            this.destroyLocationPreviewMap();
+            
+            if (typeof mapboxgl === 'undefined') {
+                console.error('Mapbox GL JS not loaded');
+                return;
+            }
+            
+            this.locationPreviewMap = new mapboxgl.Map({
+                container: 'location-preview-map',
+                style: 'mapbox://styles/mapbox/streets-v11',
+                center: coordinates,
+                zoom: 15,
+                interactive: false
+            });
+            
+            new mapboxgl.Marker()
+                .setLngLat(coordinates)
+                .addTo(this.locationPreviewMap);
+        },
+        
+        destroyLocationPreviewMap() {
+            if (this.locationPreviewMap) {
+                this.locationPreviewMap.remove();
+                this.locationPreviewMap = null;
+            }
         },
         
         selectDate(date) {
@@ -593,14 +764,15 @@ function adminApp() {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    alert(`Extracted ${data.count} events. Check the events list.`);
+                    this.showToast(`Successfully extracted ${data.count} events!`, 'success');
                     await this.loadEvents();
+                    this.closeBulkImportModal();
                 } else {
-                    alert('Error extracting events');
+                    this.showToast('Error extracting events. Please try again.', 'error');
                 }
             } catch (error) {
                 console.error('Error extracting events:', error);
-                alert('Error extracting events');
+                this.showToast('Error extracting events. Please try again.', 'error');
             } finally {
                 this.extracting = false;
             }
@@ -629,6 +801,9 @@ function adminApp() {
         
         init() {
             this.loadEvents();
+            // Set smart defaults for new events
+            this.eventForm.date = this.getCurrentDate();
+            this.eventForm.time = this.getCurrentTime();
         }
     }
 }
