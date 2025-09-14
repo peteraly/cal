@@ -36,7 +36,7 @@ def init_db():
         )
     ''')
     
-    # Create events table with category reference, tags, host, and pricing
+    # Create events table with category reference, tags, host, pricing, and URL
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,9 +48,17 @@ def init_db():
             tags TEXT,
             host TEXT,
             price_info TEXT,
+            url TEXT,
             FOREIGN KEY (category_id) REFERENCES categories (id)
         )
     ''')
+    
+    # Add URL column to existing events table if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE events ADD COLUMN url TEXT')
+    except sqlite3.OperationalError:
+        # Column already exists
+        pass
     
     # Add new columns if they don't exist (for existing databases)
     try:
@@ -317,7 +325,7 @@ def admin_login():
         password = request.form.get('password')
         
         # Simple password check (in production, use proper hashing)
-        admin_password = os.environ.get('ADMIN_PASSWORD', 'test')
+        admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
         if username == 'admin' and password == admin_password:
             session['logged_in'] = True
             return redirect(url_for('admin'))

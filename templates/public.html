@@ -139,7 +139,7 @@
             </div>
             
             <!-- Events List (Bottom Half) -->
-            <div x-show="!loading" class="relative events-container" x-ref="eventsContainer">
+            <div x-show="!loading" class="relative events-container" x-ref="eventsContainer" x-init="console.log('📋 Events container loaded, loading state:', loading, 'filteredEvents length:', filteredEvents.length)">
                 <!-- Scrollable Events Container - Limited Height for 4 Events -->
                 <div class="space-y-4 pb-8 max-h-[600px] sm:max-h-[500px] overflow-y-auto" 
                      :class="{'fade-bottom': filteredEvents.length > 4 && !isAtEndOfList()}"
@@ -149,7 +149,8 @@
                              :data-event-id="event.id"
                              :data-event-date="event.start_datetime.split('T')[0]"
                              :data-event-index="index"
-                             @click="toggleEvent(event.id)">
+                             @click="toggleEvent(event.id)"
+                             x-init="console.log('🎯 Rendering event:', event.title, 'at index:', index)">
                             
                             <!-- Event Header -->
                             <div class="flex items-start justify-between mb-3">
@@ -167,6 +168,12 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                         </svg>
                                         <span x-text="event.location"></span>
+                                    </div>
+                                    <div x-show="event.url" class="flex items-center text-sm text-blue-600 mb-2">
+                                        <svg class="w-4 h-4 mr-1.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                        </svg>
+                                        <a :href="event.url" target="_blank" class="hover:underline truncate" x-text="event.url"></a>
                                     </div>
                                 </div>
                                 <div class="ml-3 flex-shrink-0">
@@ -386,11 +393,14 @@ function publicApp() {
         
         get filteredEvents() {
             if (!this.selectedDate) {
+                console.log('📅 No date selected, showing all events:', this.sortedEvents.length);
                 return this.sortedEvents;
             }
-            return this.sortedEvents.filter(event => 
+            const filtered = this.sortedEvents.filter(event => 
                 event.start_datetime.startsWith(this.selectedDate)
             );
+            console.log('📅 Date selected, filtered events:', filtered.length);
+            return filtered;
         },
         
         get eventsWithLocations() {
@@ -439,6 +449,7 @@ function publicApp() {
         },
         
         async loadEvents() {
+            console.log('🔄 Loading events...');
             this.loading = true;
             try {
                 const response = await fetch('/api/events', {
@@ -454,8 +465,9 @@ function publicApp() {
                 }
                 
                 this.events = await response.json();
+                console.log(`✅ Loaded ${this.events.length} events:`, this.events);
             } catch (error) {
-                console.error('Error loading events:', error);
+                console.error('❌ Error loading events:', error);
                 // Show user-friendly error message
                 this.showErrorMessage = true;
                 setTimeout(() => {
@@ -463,6 +475,7 @@ function publicApp() {
                 }, 5000);
             } finally {
                 this.loading = false;
+                console.log('🏁 Loading complete, events array:', this.events.length);
             }
         },
         
