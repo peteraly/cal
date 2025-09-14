@@ -783,14 +783,17 @@ Example response:
                 },
 
                 parseWithRegex(text) {
-                    // Fallback regex-based parsing
+                    // Enhanced regex-based parsing for structured event data
                     const result = {
                         type: 'other',
                         title: '',
                         date: '',
                         time: '',
                         location: '',
-                        description: text
+                        address: '',
+                        price: '',
+                        description: text,
+                        hosts: ''
                     };
                     
                     // Extract title (first line or sentence)
@@ -808,6 +811,18 @@ Example response:
                     // Extract location
                     result.location = this.extractLocation(text);
                     
+                    // Extract address
+                    result.address = this.extractAddress(text);
+                    
+                    // Extract price
+                    result.price = this.extractPrice(text);
+                    
+                    // Extract hosts/speakers
+                    result.hosts = this.extractHosts(text);
+                    
+                    // Extract description
+                    result.description = this.extractDescription(text);
+                    
                     return result;
                 },
 
@@ -821,10 +836,13 @@ Example response:
                 },
 
                 extractDate(text) {
-                    // Look for date patterns
+                    // Look for date patterns (enhanced for structured events)
                     const datePatterns = [
-                        /(\d{1,2}\/\d{1,2}\/\d{4})/,
-                        /(\d{4}-\d{2}-\d{2})/,
+                        /(\w{3},?\s+\w{3}\s+\d{1,2})/i,  // Mon, Sep 15 or Mon Sep 15
+                        /(\d{1,2}\/\d{1,2}\/\d{4})/,      // 9/15/2025
+                        /(\d{4}-\d{2}-\d{2})/,            // 2025-09-15
+                        /(\w+\s+\d{1,2},?\s+\d{4})/i,     // September 15, 2025
+                        /(\d{1,2}\s+\w+\s+\d{4})/i,       // 15 September 2025
                         /(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
                         /(january|february|march|april|may|june|july|august|september|october|november|december)/i
                     ];
@@ -842,11 +860,15 @@ Example response:
                 },
 
                 extractTime(text) {
-                    // Look for time patterns
+                    // Look for time patterns (enhanced for structured events)
                     const timePatterns = [
-                        /(\d{1,2}:\d{2}\s*(am|pm))/i,
-                        /(\d{1,2}\s*(am|pm))/i,
-                        /(\d{1,2}:\d{2})/
+                        /(\d{1,2}:\d{2}\s*[ap]m)/i,       // 7:00pm, 7:00 pm
+                        /(\d{1,2}\s*[ap]m)/i,             // 7pm, 7 pm
+                        /(\d{1,2}:\d{2}\s*(am|pm))/i,     // 7:00 am, 7:00 pm
+                        /(\d{1,2}\s*(am|pm))/i,           // 7 am, 7 pm
+                        /(\d{1,2}:\d{2})/,                // 19:00
+                        /(\d{1,2}\s*to\s*\d{1,2}\s*[ap]m)/i, // 7 to 9pm
+                        /(\d{1,2}:\d{2}\s*to\s*\d{1,2}:\d{2}\s*[ap]m)/i // 7:00 to 9:00pm
                     ];
                     
                     for (const pattern of timePatterns) {
@@ -862,7 +884,29 @@ Example response:
                 },
 
                 extractLocation(text) {
-                    // Look for location indicators
+                    // Look for location indicators (enhanced for venue names)
+                    const locationKeywords = [
+                        'theater', 'theatre', 'center', 'centre', 'hall', 'museum', 'gallery', 
+                        'library', 'bookstore', 'cafe', 'restaurant', 'bar', 'club', 'park', 
+                        'plaza', 'square', 'arena', 'stadium', 'auditorium', 'conference', 
+                        'convention', 'hotel', 'resort', 'venue', 'space', 'room', 'building'
+                    ];
+                    
+                    const lines = text.split('\n').map(line => line.trim());
+                    
+                    // Look for venue names (standalone lines with location keywords)
+                    for (const line of lines) {
+                        const lowerLine = line.toLowerCase();
+                        if (locationKeywords.some(keyword => lowerLine.includes(keyword)) && 
+                            line.length < 100 && 
+                            !line.includes('$') && 
+                            !line.match(/\d{1,2}:\d{2}/) &&
+                            !line.match(/\d+\s+[^,]+,\s*[^,]+,\s*[A-Z]{2}/)) {
+                            return line;
+                        }
+                    }
+                    
+                    // Fallback: look for location patterns
                     const locationPatterns = [
                         /(?:in|at|@)\s+([^.!?\n]+?)(?:\s|$)/i,
                         /(?:room|hall|center|theater|venue|location)\s+([^.!?\n]+?)(?:\s|$)/i
@@ -906,6 +950,78 @@ Example response:
                     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
                 },
 
+                extractAddress(text) {
+                    // Look for full address patterns
+                    const addressPattern = /(\d+\s+[^,]+,\s*[^,]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?)/i;
+                    const match = text.match(addressPattern);
+                    return match ? match[1] : '';
+                },
+
+                extractPrice(text) {
+                    // Look for price information
+                    const pricePatterns = [
+                        /(free)/i,
+                        /(\$\d+)/,
+                        /(\$\d+-\d+)/,
+                        /(\$\d+\s*per\s*person)/i,
+                        /(donation)/i,
+                        /(suggested\s+donation)/i,
+                        /(pay\s+what\s+you\s+can)/i
+                    ];
+
+                    for (const pattern of pricePatterns) {
+                        const match = text.match(pattern);
+                        if (match) {
+                            return match[1];
+                        }
+                    }
+                    return '';
+                },
+
+                extractHosts(text) {
+                    // Extract hosts/speakers/artists
+                    const hostPatterns = [
+                        /(discusses?\s+["'].*["']\s+with\s+([^.\n]+))/i,
+                        /(in\s+conversation\s+with\s+([^.\n]+))/i,
+                        /(featuring\s+([^.\n]+))/i,
+                        /(with\s+([^.\n]+))/i,
+                        /(hosted\s+by\s+([^.\n]+))/i
+                    ];
+
+                    for (const pattern of hostPatterns) {
+                        const match = text.match(pattern);
+                        if (match) {
+                            return match[1] || match[2];
+                        }
+                    }
+                    return '';
+                },
+
+                extractDescription(text) {
+                    // Look for FULL DESCRIPTION or extract longest text block
+                    const lines = text.split('\n').map(line => line.trim());
+                    let descriptionStart = -1;
+                    
+                    for (let i = 0; i < lines.length; i++) {
+                        if (lines[i].toLowerCase().includes('full description') || 
+                            lines[i].toLowerCase().includes('description')) {
+                            descriptionStart = i + 1;
+                            break;
+                        }
+                    }
+
+                    if (descriptionStart > 0) {
+                        return lines.slice(descriptionStart).join(' ');
+                    } else {
+                        // Fallback: use longest text blocks
+                        const longTexts = lines.filter(line => line.length > 50);
+                        if (longTexts.length > 0) {
+                            return longTexts.join(' ');
+                        }
+                    }
+                    return text;
+                },
+
                 populateForm(parsedData) {
                     // Populate the form with parsed data
                     Object.keys(parsedData).forEach(key => {
@@ -913,6 +1029,25 @@ Example response:
                             this.eventForm[key] = parsedData[key];
                         }
                     });
+                    
+                    // Handle location and address with Mapbox integration
+                    if (parsedData.location && parsedData.address) {
+                        // If we have both location name and address, use Mapbox search
+                        this.locationSearch = parsedData.location;
+                        this.searchLocations().then(() => {
+                            // Try to find exact match or select first suggestion
+                            const exactMatch = this.locationSuggestions.find(suggestion => 
+                                suggestion.name.toLowerCase().includes(parsedData.location.toLowerCase())
+                            );
+                            if (exactMatch) {
+                                this.selectLocation(exactMatch);
+                            } else if (this.locationSuggestions.length > 0) {
+                                this.selectLocation(this.locationSuggestions[0]);
+                            }
+                        });
+                    } else if (parsedData.location) {
+                        this.eventForm.location = parsedData.location;
+                    }
                     
                     // Update form fields based on event type
                     this.updateFormFields();
