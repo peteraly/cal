@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div x-data="adminDashboard()" class="min-h-screen">
+        
+        <!-- Login Screen -->
+        <div x-show="!isLoggedIn" x-cloak class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+            <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md mx-4">
+                <div class="text-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-800 mb-2">Admin Dashboard</h1>
+                    <p class="text-gray-600">Calendar Event Management</p>
+                </div>
+                
+                <form @submit.prevent="login()" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input x-model="loginForm.username" type="text" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input x-model="loginForm.password" type="password" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div x-show="loginError" class="text-red-600 text-sm" x-cloak>
+                        Invalid credentials. Please try again.
+                    </div>
+                    
+                    <button type="submit" 
+                            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                        Login
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div x-show="isLoggedIn" x-cloak class="min-h-screen">
+            <!-- Header -->
+            <div class="bg-white shadow-sm border-b">
+                <div class="max-w-4xl mx-auto px-4 py-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h1 class="text-xl font-semibold text-gray-800">Event Management</h1>
+                            <p class="text-sm text-gray-600">Add and manage calendar events</p>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button @click="exportData()" 
+                                    class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors">
+                                Export Data
+                            </button>
+                            <button @click="logout()" 
+                                    class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors">
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="max-w-4xl mx-auto px-4 py-6">
+                
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <div class="text-2xl font-bold text-blue-600" x-text="events.length"></div>
+                        <div class="text-sm text-gray-600">Total Events</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <div class="text-2xl font-bold text-green-600" x-text="getUpcomingEvents().length"></div>
+                        <div class="text-sm text-gray-600">Upcoming Events</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <div class="text-2xl font-bold text-purple-600" x-text="getUniqueLocations().length"></div>
+                        <div class="text-sm text-gray-600">Unique Locations</div>
+                    </div>
+                </div>
+
+                <!-- Event Form -->
+                <div class="bg-white rounded-lg shadow-sm border mb-6">
+                    <div class="p-6">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">Add New Event</h2>
+                        
+                        <form @submit.prevent="addEvent()" class="space-y-4">
+                            <!-- Event Type -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Event Type</label>
+                                <select x-model="eventForm.type" @change="updateFormFields()" required
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Select event type...</option>
+                                    <option value="meeting">Meeting</option>
+                                    <option value="workshop">Workshop</option>
+                                    <option value="conference">Conference</option>
+                                    <option value="social">Social Event</option>
+                                    <option value="performance">Performance</option>
+                                    <option value="festival">Festival</option>
+                                    <option value="sports">Sports Event</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                            <!-- Dynamic Fields Based on Event Type -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Title -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Event Title</label>
+                                    <input x-model="eventForm.title" type="text" required
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <!-- Date -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                    <input x-model="eventForm.date" type="date" required
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <!-- Time -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                                    <input x-model="eventForm.time" type="time" required
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <!-- Duration (for certain event types) -->
+                                <div x-show="showDurationField()">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Duration (hours)</label>
+                                    <input x-model="eventForm.duration" type="number" min="0.5" step="0.5"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <!-- Location -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                    <input x-model="eventForm.location" type="text" required
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <!-- Price (for certain event types) -->
+                                <div x-show="showPriceField()">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                                    <input x-model="eventForm.price" type="text" placeholder="e.g., Free, $25, $50-100"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+
+                            <!-- Description -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <textarea x-model="eventForm.description" rows="3"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          placeholder="Event description..."></textarea>
+                            </div>
+
+                            <!-- Additional Fields Based on Event Type -->
+                            <div x-show="eventForm.type === 'meeting'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Meeting Type</label>
+                                    <select x-model="eventForm.meetingType"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">Select type...</option>
+                                        <option value="team">Team Meeting</option>
+                                        <option value="client">Client Meeting</option>
+                                        <option value="board">Board Meeting</option>
+                                        <option value="standup">Standup</option>
+                                        <option value="one-on-one">One-on-One</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Attendees</label>
+                                    <input x-model="eventForm.attendees" type="text" placeholder="e.g., John, Jane, Bob"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+
+                            <div x-show="eventForm.type === 'workshop'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Instructor</label>
+                                    <input x-model="eventForm.instructor" type="text"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Participants</label>
+                                    <input x-model="eventForm.maxParticipants" type="number" min="1"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+
+                            <div x-show="eventForm.type === 'performance'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Artist/Performer</label>
+                                    <input x-model="eventForm.performer" type="text"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Genre</label>
+                                    <input x-model="eventForm.genre" type="text" placeholder="e.g., Jazz, Rock, Classical"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="flex justify-end space-x-3 pt-4">
+                                <button type="button" @click="resetForm()"
+                                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                                    Reset
+                                </button>
+                                <button type="submit"
+                                        class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    Add Event
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Events List -->
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">All Events</h2>
+                        
+                        <div x-show="events.length === 0" class="text-center py-8 text-gray-500">
+                            No events added yet. Create your first event above!
+                        </div>
+
+                        <div x-show="events.length > 0" class="space-y-3">
+                            <template x-for="(event, index) in sortedEvents" :key="event.id">
+                                <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-2 mb-2">
+                                                <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full" x-text="event.type"></span>
+                                                <h3 class="font-medium text-gray-800" x-text="event.title"></h3>
+                                            </div>
+                                            <div class="text-sm text-gray-600 space-y-1">
+                                                <div><strong>Date:</strong> <span x-text="formatDate(event.date)"></span></div>
+                                                <div><strong>Time:</strong> <span x-text="event.time"></span></div>
+                                                <div><strong>Location:</strong> <span x-text="event.location"></span></div>
+                                                <div x-show="event.price"><strong>Price:</strong> <span x-text="event.price"></span></div>
+                                                <div x-show="event.description"><strong>Description:</strong> <span x-text="event.description"></span></div>
+                                            </div>
+                                        </div>
+                                        <button @click="deleteEvent(index)"
+                                                class="ml-4 text-red-600 hover:text-red-800 focus:outline-none">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function adminDashboard() {
+            return {
+                isLoggedIn: false,
+                loginError: false,
+                loginForm: {
+                    username: '',
+                    password: ''
+                },
+                eventForm: {
+                    type: '',
+                    title: '',
+                    date: '',
+                    time: '',
+                    duration: '',
+                    location: '',
+                    price: '',
+                    description: '',
+                    meetingType: '',
+                    attendees: '',
+                    instructor: '',
+                    maxParticipants: '',
+                    performer: '',
+                    genre: ''
+                },
+                events: [],
+
+                init() {
+                    // Load events from localStorage
+                    this.loadEvents();
+                    // Set default date to today
+                    this.eventForm.date = new Date().toISOString().split('T')[0];
+                    // Set default time to current time
+                    const now = new Date();
+                    this.eventForm.time = now.toTimeString().slice(0, 5);
+                },
+
+                login() {
+                    if (this.loginForm.username === 'admin' && this.loginForm.password === 'password123') {
+                        this.isLoggedIn = true;
+                        this.loginError = false;
+                    } else {
+                        this.loginError = true;
+                    }
+                },
+
+                logout() {
+                    this.isLoggedIn = false;
+                    this.loginForm = { username: '', password: '' };
+                    this.loginError = false;
+                },
+
+                updateFormFields() {
+                    // Reset additional fields when event type changes
+                    this.eventForm.meetingType = '';
+                    this.eventForm.attendees = '';
+                    this.eventForm.instructor = '';
+                    this.eventForm.maxParticipants = '';
+                    this.eventForm.performer = '';
+                    this.eventForm.genre = '';
+                },
+
+                showDurationField() {
+                    return ['meeting', 'workshop', 'conference', 'performance'].includes(this.eventForm.type);
+                },
+
+                showPriceField() {
+                    return ['workshop', 'conference', 'performance', 'festival', 'sports'].includes(this.eventForm.type);
+                },
+
+                addEvent() {
+                    const event = {
+                        id: Date.now(),
+                        ...this.eventForm,
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    this.events.push(event);
+                    this.saveEvents();
+                    this.resetForm();
+                    
+                    // Show success message (you could add a toast notification here)
+                    alert('Event added successfully!');
+                },
+
+                deleteEvent(index) {
+                    if (confirm('Are you sure you want to delete this event?')) {
+                        this.events.splice(index, 1);
+                        this.saveEvents();
+                    }
+                },
+
+                resetForm() {
+                    this.eventForm = {
+                        type: '',
+                        title: '',
+                        date: new Date().toISOString().split('T')[0],
+                        time: new Date().toTimeString().slice(0, 5),
+                        duration: '',
+                        location: '',
+                        price: '',
+                        description: '',
+                        meetingType: '',
+                        attendees: '',
+                        instructor: '',
+                        maxParticipants: '',
+                        performer: '',
+                        genre: ''
+                    };
+                },
+
+                saveEvents() {
+                    localStorage.setItem('calendarEvents', JSON.stringify(this.events));
+                },
+
+                loadEvents() {
+                    const saved = localStorage.getItem('calendarEvents');
+                    if (saved) {
+                        this.events = JSON.parse(saved);
+                    }
+                },
+
+                exportData() {
+                    const data = {
+                        events: this.events,
+                        exportedAt: new Date().toISOString(),
+                        totalEvents: this.events.length
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `calendar-events-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                },
+
+                getUpcomingEvents() {
+                    const today = new Date().toISOString().split('T')[0];
+                    return this.events.filter(event => event.date >= today);
+                },
+
+                getUniqueLocations() {
+                    const locations = this.events.map(event => event.location);
+                    return [...new Set(locations)];
+                },
+
+                get sortedEvents() {
+                    return [...this.events].sort((a, b) => {
+                        if (a.date !== b.date) {
+                            return new Date(a.date) - new Date(b.date);
+                        }
+                        return a.time.localeCompare(b.time);
+                    });
+                },
+
+                formatDate(dateString) {
+                    return new Date(dateString).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
