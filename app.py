@@ -6,6 +6,7 @@ from functools import wraps
 import hashlib
 from dotenv import load_dotenv
 from ai_parser import EventParser, suggest_recurrence, analyze_event_importance, SearchParser
+from sync_service import SyncService
 import json
 import re
 
@@ -17,6 +18,9 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 
 # Database setup
 DATABASE = 'calendar.db'
+
+# Initialize sync service
+sync_service = SyncService(DATABASE)
 
 def init_db():
     """Initialize the database with events and categories tables"""
@@ -893,6 +897,73 @@ def get_subscription_suggestions():
         'venues': venues,
         'tags': list(all_tags)
     })
+
+# Sync API Endpoints
+@app.route('/api/sync/batch', methods=['POST'])
+def batch_sync():
+    """Handle batch synchronization from admin dashboard"""
+    try:
+        data = request.get_json()
+        sync_operations = data.get('operations', [])
+        sync_session_id = data.get('sync_session_id', f"sync_{datetime.now().timestamp()}")
+        
+        if not sync_operations:
+            return jsonify({'error': 'No operations provided'}), 400
+        
+        # Process batch sync
+        results = sync_service.batch_sync_from_admin(sync_operations, sync_session_id)
+        
+        return jsonify({
+            'success': True,
+            'sync_session_id': sync_session_id,
+            'results': results
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Batch sync error: {str(e)}")
+        return jsonify({'error': f'Sync failed: {str(e)}'}), 500
+
+@app.route('/api/sync/history')
+def get_sync_history():
+    """Get sync history"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        history = sync_service.get_sync_history(limit)
+        return jsonify(history)
+    except Exception as e:
+        app.logger.error(f"Sync history error: {str(e)}")
+        return jsonify({'error': f'Failed to get sync history: {str(e)}'}), 500
+
+@app.route('/api/sync/statistics')
+def get_sync_statistics():
+    """Get sync statistics"""
+    try:
+        stats = sync_service.get_sync_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        app.logger.error(f"Sync statistics error: {str(e)}")
+        return jsonify({'error': f'Failed to get sync statistics: {str(e)}'}), 500
+
+@app.route('/api/sync/status')
+def get_sync_status():
+    """Get current sync status"""
+    try:
+        # Get recent sync activity
+        recent_history = sync_service.get_sync_history(10)
+        stats = sync_service.get_sync_statistics()
+        
+        # Check for recent failures
+        recent_failures = [h for h in recent_history if not h['success']]
+        
+        return jsonify({
+            'status': 'healthy' if len(recent_failures) == 0 else 'issues',
+            'recent_activity': recent_history,
+            'statistics': stats,
+            'recent_failures': recent_failures
+        })
+    except Exception as e:
+        app.logger.error(f"Sync status error: {str(e)}")
+        return jsonify({'error': f'Failed to get sync status: {str(e)}'}), 500
 
 if __name__ == '__main__':
     init_db()
