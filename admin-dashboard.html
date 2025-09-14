@@ -63,6 +63,10 @@
                                     class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors">
                                 Export Data
                             </button>
+                            <button @click="showDeleteAllModal = true" 
+                                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">
+                                Delete All Events
+                            </button>
                             <button @click="logout()" 
                                     class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors">
                                 Logout
@@ -88,6 +92,83 @@
                     <div class="bg-white p-4 rounded-lg shadow-sm border">
                         <div class="text-2xl font-bold text-purple-600" x-text="getUniqueLocations().length"></div>
                         <div class="text-sm text-gray-600">Unique Locations</div>
+                    </div>
+                </div>
+
+                <!-- Calendar Navigation -->
+                <div class="bg-white rounded-lg shadow-sm border mb-6">
+                    <div class="p-6">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">📅 Calendar Navigation</h2>
+                        <p class="text-sm text-gray-600 mb-4">Click on any date to view and manage events for that day</p>
+                        
+                        <!-- Calendar Header -->
+                        <div class="flex justify-between items-center mb-4">
+                            <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                            </button>
+                            <h3 class="text-lg font-semibold text-gray-800" x-text="currentMonthYear"></h3>
+                            <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Calendar Grid -->
+                        <div class="grid grid-cols-7 gap-1 mb-2">
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">M</div>
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">W</div>
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">T</div>
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">F</div>
+                            <div class="text-center text-xs font-medium text-gray-500 py-2">S</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-7 gap-1">
+                            <template x-for="day in calendarDays" :key="day.date">
+                                <button @click="selectDate(day.date)" 
+                                        :class="{
+                                            'bg-blue-100 text-blue-800': day.isSelected,
+                                            'bg-gray-50 text-gray-400': !day.isCurrentMonth,
+                                            'bg-white text-gray-800 hover:bg-gray-100': day.isCurrentMonth && !day.isSelected,
+                                            'bg-red-100 text-red-800': day.hasEvents && !day.isSelected
+                                        }"
+                                        class="h-10 w-10 rounded-full text-sm font-medium transition-colors relative">
+                                    <span x-text="day.day"></span>
+                                    <div x-show="day.hasEvents && !day.isSelected" 
+                                         class="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-red-500 rounded-full"></div>
+                                </button>
+                            </template>
+                        </div>
+                        
+                        <!-- Selected Date Events -->
+                        <div x-show="selectedDate" class="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <h4 class="font-medium text-blue-800 mb-2">
+                                Events for <span x-text="formatSelectedDate()"></span>
+                            </h4>
+                            <div x-show="getEventsForDate(selectedDate).length === 0" class="text-blue-600 text-sm">
+                                No events scheduled for this date.
+                            </div>
+                            <div x-show="getEventsForDate(selectedDate).length > 0" class="space-y-2">
+                                <template x-for="event in getEventsForDate(selectedDate)" :key="event.id">
+                                    <div class="flex justify-between items-center bg-white p-2 rounded border">
+                                        <div>
+                                            <div class="font-medium text-gray-800" x-text="event.title"></div>
+                                            <div class="text-sm text-gray-600" x-text="event.time + ' - ' + event.location"></div>
+                                        </div>
+                                        <button @click="deleteEventById(event.id)" 
+                                                class="text-red-600 hover:text-red-800">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -314,6 +395,39 @@
                 </div>
             </div>
         </div>
+
+        <!-- Delete All Events Modal -->
+        <div x-show="showDeleteAllModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-medium text-gray-900">Delete All Events</h3>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <p class="text-sm text-gray-500">
+                        Are you sure you want to delete all <strong x-text="events.length"></strong> events? This action cannot be undone.
+                    </p>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button @click="showDeleteAllModal = false" 
+                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        Cancel
+                    </button>
+                    <button @click="deleteAllEvents()" 
+                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500">
+                        Delete All Events
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -346,6 +460,9 @@
                 isParsing: false,
                 parseError: '',
                 parseSuccess: false,
+                showDeleteAllModal: false,
+                currentDate: new Date(),
+                selectedDate: null,
 
                 init() {
                     // Load events from localStorage
@@ -742,6 +859,108 @@ Example response:
                     this.parseText = '';
                     this.parseError = '';
                     this.parseSuccess = false;
+                },
+
+                deleteAllEvents() {
+                    this.events = [];
+                    this.saveEvents();
+                    this.showDeleteAllModal = false;
+                    alert('All events have been deleted successfully!');
+                },
+
+                deleteEventById(eventId) {
+                    const index = this.events.findIndex(event => event.id === eventId);
+                    if (index !== -1) {
+                        this.events.splice(index, 1);
+                        this.saveEvents();
+                    }
+                },
+
+                selectDate(date) {
+                    this.selectedDate = date;
+                },
+
+                previousMonth() {
+                    this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1);
+                },
+
+                nextMonth() {
+                    this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1);
+                },
+
+                getEventsForDate(date) {
+                    return this.events.filter(event => event.date === date);
+                },
+
+                formatSelectedDate() {
+                    if (!this.selectedDate) return '';
+                    return new Date(this.selectedDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                },
+
+                get currentMonthYear() {
+                    return this.currentDate.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long'
+                    });
+                },
+
+                get calendarDays() {
+                    const year = this.currentDate.getFullYear();
+                    const month = this.currentDate.getMonth();
+                    
+                    const firstDay = new Date(year, month, 1);
+                    const lastDay = new Date(year, month + 1, 0);
+                    const daysInMonth = lastDay.getDate();
+                    const startingDayOfWeek = firstDay.getDay();
+                    
+                    const days = [];
+                    
+                    // Add previous month's trailing days
+                    const prevMonth = new Date(year, month - 1, 0);
+                    for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+                        const day = prevMonth.getDate() - i;
+                        days.push({
+                            day: day,
+                            date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                            isCurrentMonth: false,
+                            isSelected: false,
+                            hasEvents: false
+                        });
+                    }
+                    
+                    // Add current month's days
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const hasEvents = this.getEventsForDate(dateStr).length > 0;
+                        const isSelected = this.selectedDate === dateStr;
+                        
+                        days.push({
+                            day: day,
+                            date: dateStr,
+                            isCurrentMonth: true,
+                            isSelected: isSelected,
+                            hasEvents: hasEvents
+                        });
+                    }
+                    
+                    // Add next month's leading days to fill the grid
+                    const remainingDays = 42 - days.length; // 6 rows × 7 days
+                    for (let day = 1; day <= remainingDays; day++) {
+                        days.push({
+                            day: day,
+                            date: `${year}-${String(month + 2).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+                            isCurrentMonth: false,
+                            isSelected: false,
+                            hasEvents: false
+                        });
+                    }
+                    
+                    return days;
                 },
 
                 formatDate(dateString) {
