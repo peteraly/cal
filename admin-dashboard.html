@@ -72,9 +72,15 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     
-                    <!-- Add Event Form -->
+                    <!-- Add/Edit Event Form -->
                     <div class="bg-white rounded-lg shadow p-6">
-                        <h2 class="text-lg font-semibold text-gray-900 mb-4">Add New Event</h2>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-semibold text-gray-900" x-text="isEditing ? 'Edit Event' : 'Add New Event'"></h2>
+                            <button x-show="isEditing" @click="cancelEdit()" 
+                                    class="text-gray-500 hover:text-gray-700 text-sm">
+                                Cancel Edit
+                            </button>
+                        </div>
                         
                         <form @submit.prevent="addEvent()" class="space-y-4">
                             <!-- Event Type Dropdown -->
@@ -175,8 +181,8 @@
                                 <!-- Submit Button -->
                                 <div class="pt-4">
                                     <button type="submit" 
-                                            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                        Add Event
+                                            class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            x-text="isEditing ? 'Update Event' : 'Add Event'">
                                     </button>
                                 </div>
                             </div>
@@ -207,11 +213,18 @@
                                                 </template>
                                             </div>
                                         </div>
-                                        <button @click="deleteEvent(index)" class="text-red-600 hover:text-red-800 ml-2">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                            </svg>
-                                        </button>
+                                        <div class="flex space-x-2">
+                                            <button @click="editEvent(index)" class="text-blue-600 hover:text-blue-800">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                            </button>
+                                            <button @click="deleteEvent(index)" class="text-red-600 hover:text-red-800">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -279,6 +292,8 @@
                     tags: ''
                 },
                 events: [],
+                editingEvent: null,
+                isEditing: false,
                 toast: {
                     show: false,
                     type: 'success',
@@ -349,7 +364,7 @@
 
                     const time24 = `${hour24.toString().padStart(2, '0')}:${this.eventForm.minute}`;
 
-                    const event = {
+                    const eventData = {
                         type: this.eventForm.type,
                         title: this.eventForm.title,
                         date: this.eventForm.date,
@@ -361,15 +376,53 @@
                         description: this.eventForm.description,
                         price: this.eventForm.price,
                         host: this.eventForm.host,
-                        tags: this.eventForm.tags ? this.eventForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
-                        id: Date.now()
+                        tags: this.eventForm.tags ? this.eventForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : []
                     };
 
-                    this.events.push(event);
+                    if (this.isEditing && this.editingEvent !== null) {
+                        // Update existing event
+                        eventData.id = this.events[this.editingEvent].id; // Keep original ID
+                        this.events[this.editingEvent] = eventData;
+                        this.showToast('Event updated successfully!', 'success');
+                        this.cancelEdit();
+                    } else {
+                        // Add new event
+                        eventData.id = Date.now();
+                        this.events.push(eventData);
+                        this.showToast('Event added successfully!', 'success');
+                        this.updateFormFields();
+                    }
+
                     this.saveEvents();
-                    this.showToast('Event added successfully!', 'success');
+                },
+
+                editEvent(index) {
+                    const event = this.events[index];
+                    this.editingEvent = index;
+                    this.isEditing = true;
                     
-                    // Reset form
+                    // Populate form with event data
+                    this.eventForm = {
+                        type: event.type,
+                        title: event.title,
+                        date: event.date,
+                        hour: event.hour || '',
+                        minute: event.minute || '',
+                        ampm: event.ampm || '',
+                        location: event.location || '',
+                        description: event.description || '',
+                        price: event.price || '',
+                        host: event.host || '',
+                        tags: event.tags ? event.tags.join(', ') : ''
+                    };
+                    
+                    // Scroll to form
+                    document.querySelector('.bg-white.rounded-lg.shadow.p-6').scrollIntoView({ behavior: 'smooth' });
+                },
+
+                cancelEdit() {
+                    this.isEditing = false;
+                    this.editingEvent = null;
                     this.updateFormFields();
                 },
 
@@ -378,6 +431,13 @@
                         this.events.splice(index, 1);
                         this.saveEvents();
                         this.showToast('Event deleted successfully!', 'success');
+                        
+                        // Cancel edit if we were editing the deleted event
+                        if (this.editingEvent === index) {
+                            this.cancelEdit();
+                        } else if (this.editingEvent > index) {
+                            this.editingEvent--;
+                        }
                     }
                 },
 
