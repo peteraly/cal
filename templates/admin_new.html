@@ -43,11 +43,6 @@
                         class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
                     📍 Map
                 </button>
-                <button @click="activeTab = 'feed'" 
-                        :class="{'border-blue-500 text-blue-600': activeTab === 'feed', 'border-transparent text-gray-500': activeTab !== 'feed'}"
-                        class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
-                    ▶️ Feed
-                </button>
             </div>
         </div>
         
@@ -204,29 +199,6 @@
                 </div>
             </div>
             
-            <!-- Feed View -->
-            <div x-show="activeTab === 'feed'" class="p-4">
-                <div class="mb-4">
-                    <h2 class="text-lg font-semibold text-gray-800 mb-2">Event Feed</h2>
-                    <p class="text-sm text-gray-600">Video content and highlights</p>
-                </div>
-                
-                <!-- Feed Placeholder -->
-                <div class="space-y-4">
-                    <div class="bg-gray-100 rounded-lg h-48 flex items-center justify-center">
-                        <div class="text-center">
-                            <div class="text-gray-400 text-4xl mb-2">▶️</div>
-                            <p class="text-gray-500 text-sm">Video feed coming soon</p>
-                        </div>
-                    </div>
-                    <div class="bg-gray-100 rounded-lg h-48 flex items-center justify-center">
-                        <div class="text-center">
-                            <div class="text-gray-400 text-4xl mb-2">📹</div>
-                            <p class="text-gray-500 text-sm">More content here</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     

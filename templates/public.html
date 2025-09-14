@@ -335,31 +335,12 @@
             </div>
         </div>
         
-        <!-- Feed/Reels View -->
-        <div x-show="activeTab === 'feed'" x-transition class="p-4">
-            <div class="mb-4">
-                <h2 class="text-lg font-semibold text-gray-800 mb-2">Event Feed</h2>
-                <p class="text-sm text-gray-600">Video content and highlights</p>
-            </div>
-            
-            <!-- Feed Content -->
-            <div class="space-y-4">
-                <template x-for="i in 5" :key="i">
-                    <div class="bg-gray-200 rounded-lg h-48 flex items-center justify-center">
-                        <div class="text-center">
-                            <div class="text-gray-400 text-4xl mb-2">▶️</div>
-                            <p class="text-gray-500 text-sm">Video content coming soon</p>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
     </div>
     
     <!-- Bottom Navigation -->
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
         <div class="max-w-md mx-auto">
-            <div class="grid grid-cols-3">
+            <div class="grid grid-cols-2">
                 <!-- Events Tab (Combined Calendar + List) -->
                 <button @click="activeTab = 'events'" 
                         :class="activeTab === 'events' ? 'text-blue-600' : 'text-gray-400'"
@@ -374,14 +355,6 @@
                         class="flex flex-col items-center py-3 touch-manipulation">
                     <div class="text-xl mb-1">📍</div>
                     <div class="text-xs font-medium">Map</div>
-                </button>
-                
-                <!-- Feed Tab -->
-                <button @click="activeTab = 'feed'" 
-                        :class="activeTab === 'feed' ? 'text-blue-600' : 'text-gray-400'"
-                        class="flex flex-col items-center py-3 touch-manipulation">
-                    <div class="text-xl mb-1">▶️</div>
-                    <div class="text-xs font-medium">Feed</div>
                 </button>
             </div>
         </div>
