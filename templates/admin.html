@@ -173,16 +173,22 @@
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Time *</label>
-                            <input type="time" x-model="eventForm.time" required
-                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
+                            <div class="flex gap-2 mt-1">
+                                <input type="number" x-model="eventForm.hour" min="1" max="12" required
+                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                                       placeholder="Hour">
+                                <span class="text-gray-500 self-center">:</span>
+                                <input type="number" x-model="eventForm.minute" min="0" max="59" required
+                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+                                       placeholder="Min">
+                                <select x-model="eventForm.ampm" required
+                                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
+                                </select>
+                            </div>
                         </div>
                         
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Host/Organizer</label>
-                            <input type="text" x-model="eventForm.host"
-                                   placeholder="e.g., John Smith, Tech Meetup Group"
-                                   class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base">
-                        </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Location</label>
@@ -393,8 +399,9 @@ function adminCalendarApp() {
         eventForm: {
             title: '',
             date: '',
-            time: '',
-            host: '',
+            hour: '',
+            minute: '',
+            ampm: 'AM',
             location: '',
             description: '',
             category_id: '',
@@ -481,8 +488,31 @@ function adminCalendarApp() {
                     // Populate form fields
                     this.eventForm.title = parsed.title || '';
                     this.eventForm.date = parsed.date || '';
-                    this.eventForm.time = parsed.time || '';
-                    this.eventForm.host = parsed.host || '';
+                    
+                    // Parse time from 24-hour format to AM/PM format
+                    if (parsed.time) {
+                        const timeParts = parsed.time.split(':');
+                        if (timeParts.length >= 2) {
+                            let hour = parseInt(timeParts[0]);
+                            const minute = timeParts[1];
+                            
+                            if (hour === 0) {
+                                hour = 12;
+                                this.eventForm.ampm = 'AM';
+                            } else if (hour < 12) {
+                                this.eventForm.ampm = 'AM';
+                            } else if (hour === 12) {
+                                this.eventForm.ampm = 'PM';
+                            } else {
+                                hour = hour - 12;
+                                this.eventForm.ampm = 'PM';
+                            }
+                            
+                            this.eventForm.hour = hour.toString();
+                            this.eventForm.minute = minute;
+                        }
+                    }
+                    
                     this.eventForm.location = parsed.location || '';
                     this.eventForm.description = parsed.description || '';
                     this.eventForm.price_info = parsed.price_info || '';
@@ -576,11 +606,27 @@ function adminCalendarApp() {
                 }
             }
             
+            // Convert 24-hour time to AM/PM format
+            const eventDate = new Date(event.start_datetime);
+            let hour = eventDate.getHours();
+            const minute = eventDate.getMinutes();
+            let ampm = 'AM';
+            
+            if (hour === 0) {
+                hour = 12;
+            } else if (hour === 12) {
+                ampm = 'PM';
+            } else if (hour > 12) {
+                hour = hour - 12;
+                ampm = 'PM';
+            }
+            
             this.eventForm = {
                 title: event.title,
-                date: this.formatDate(new Date(event.start_datetime)),
-                time: this.formatTime(new Date(event.start_datetime)),
-                host: event.host || '',
+                date: this.formatDate(eventDate),
+                hour: hour.toString(),
+                minute: minute.toString().padStart(2, '0'),
+                ampm: ampm,
                 location: event.location || '',
                 description: event.description || '',
                 category_id: event.category_id || '',
@@ -616,7 +662,16 @@ function adminCalendarApp() {
             this.saving = true;
             
             try {
-                const startDatetime = `${this.eventForm.date}T${this.eventForm.time}:00`;
+                // Convert AM/PM format to 24-hour format
+                let hour24 = parseInt(this.eventForm.hour);
+                if (this.eventForm.ampm === 'AM' && hour24 === 12) {
+                    hour24 = 0;
+                } else if (this.eventForm.ampm === 'PM' && hour24 !== 12) {
+                    hour24 += 12;
+                }
+                
+                const time24 = `${hour24.toString().padStart(2, '0')}:${this.eventForm.minute.padStart(2, '0')}`;
+                const startDatetime = `${this.eventForm.date}T${time24}:00`;
                 // Handle tags - convert comma-separated string to array
                 let tags = this.eventForm.tags;
                 if (tags && typeof tags === 'string') {
@@ -626,7 +681,6 @@ function adminCalendarApp() {
                 const eventData = {
                     title: this.eventForm.title,
                     start_datetime: startDatetime,
-                    host: this.eventForm.host,
                     location: this.eventForm.location,
                     description: this.eventForm.description,
                     category_id: this.eventForm.category_id || null,
@@ -671,8 +725,9 @@ function adminCalendarApp() {
             this.eventForm = {
                 title: '',
                 date: '',
-                time: '',
-                host: '',
+                hour: '',
+                minute: '',
+                ampm: 'AM',
                 location: '',
                 description: '',
                 category_id: '',
@@ -748,7 +803,6 @@ function adminCalendarApp() {
                     const eventData = {
                         title: event.title || 'Untitled Event',
                         start_datetime: this.createStartDatetime(event.date, event.time),
-                        host: event.host || '',
                         location: event.location || '',
                         description: event.description || '',
                         category_id: null,

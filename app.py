@@ -36,17 +36,19 @@ def init_db():
         )
     ''')
     
-    # Create events table with category reference, tags, host, pricing, and URL
+    # Create events table with category reference, tags, pricing, and URL
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             start_datetime TEXT NOT NULL,
+            end_datetime TEXT,
             description TEXT,
             location TEXT,
+            location_name TEXT,
+            address TEXT,
             category_id INTEGER,
             tags TEXT,
-            host TEXT,
             price_info TEXT,
             url TEXT,
             FOREIGN KEY (category_id) REFERENCES categories (id)
@@ -60,19 +62,118 @@ def init_db():
         # Column already exists
         pass
     
+    # Create monitored_urls table for scraper
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS monitored_urls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT NOT NULL UNIQUE,
+            name TEXT,
+            enabled BOOLEAN DEFAULT 1,
+            scrape_frequency TEXT DEFAULT 'daily',
+            last_scraped TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Create scraper_logs table for tracking scraper activities
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scraper_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url_id INTEGER,
+            status TEXT NOT NULL,
+            message TEXT,
+            events_found INTEGER DEFAULT 0,
+            events_added INTEGER DEFAULT 0,
+            error_details TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (url_id) REFERENCES monitored_urls (id)
+        )
+    ''')
+    
+    # Create scraped_events table for events pending review
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scraped_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url_id INTEGER,
+            title TEXT NOT NULL,
+            start_datetime TEXT,
+            description TEXT,
+            location TEXT,
+            location_name TEXT,
+            address TEXT,
+            price_info TEXT,
+            url TEXT,
+            raw_data TEXT,
+            event_hash TEXT,
+            confidence_score REAL DEFAULT 0.0,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (url_id) REFERENCES monitored_urls (id)
+        )
+    ''')
+    
+    # Add event_hash and confidence_score columns to existing tables if they don't exist
+    try:
+        cursor.execute('ALTER TABLE events ADD COLUMN event_hash TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute('ALTER TABLE events ADD COLUMN confidence_score REAL DEFAULT 0.0')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute('ALTER TABLE scraped_events ADD COLUMN event_hash TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute('ALTER TABLE scraped_events ADD COLUMN confidence_score REAL DEFAULT 0.0')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
     # Add new columns if they don't exist (for existing databases)
     try:
         cursor.execute('ALTER TABLE events ADD COLUMN tags TEXT')
     except sqlite3.OperationalError:
         pass  # Column already exists
     
-    try:
-        cursor.execute('ALTER TABLE events ADD COLUMN host TEXT')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    # Host column removed - no longer needed
     
     try:
         cursor.execute('ALTER TABLE events ADD COLUMN price_info TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Add location_name column to existing events table if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE events ADD COLUMN location_name TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Add address column to existing events table if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE events ADD COLUMN address TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Add location_name column to existing scraped_events table if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE scraped_events ADD COLUMN location_name TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Add address column to existing scraped_events table if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE scraped_events ADD COLUMN address TEXT')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    # Add end_datetime column to existing events table if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE events ADD COLUMN end_datetime TEXT')
     except sqlite3.OperationalError:
         pass  # Column already exists
     
@@ -409,8 +510,8 @@ def create_event():
     
     conn = get_db_connection()
     cursor = conn.execute(
-        'INSERT INTO events (title, start_datetime, description, location, category_id, tags, host, price_info) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        (data['title'], data['start_datetime'], data.get('description', ''), data.get('location', ''), data.get('category_id'), tags, data.get('host', ''), data.get('price_info', ''))
+        'INSERT INTO events (title, start_datetime, end_datetime, description, location, location_name, address, category_id, tags, price_info, url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (data['title'], data['start_datetime'], data.get('end_datetime', ''), data.get('description', ''), data.get('location', ''), data.get('location_name', ''), data.get('address', ''), data.get('category_id'), tags, data.get('price_info', ''), data.get('url', ''), datetime.now().isoformat())
     )
     conn.commit()
     event_id = cursor.lastrowid
@@ -431,8 +532,8 @@ def update_event(event_id):
     
     conn = get_db_connection()
     cursor = conn.execute(
-        'UPDATE events SET title = ?, start_datetime = ?, description = ?, location = ?, category_id = ?, tags = ?, host = ?, price_info = ? WHERE id = ?',
-        (data['title'], data['start_datetime'], data.get('description', ''), data.get('location', ''), data.get('category_id'), tags, data.get('host', ''), data.get('price_info', ''), event_id)
+        'UPDATE events SET title = ?, start_datetime = ?, end_datetime = ?, description = ?, location = ?, location_name = ?, address = ?, category_id = ?, tags = ?, price_info = ?, url = ? WHERE id = ?',
+        (data['title'], data['start_datetime'], data.get('end_datetime', ''), data.get('description', ''), data.get('location', ''), data.get('location_name', ''), data.get('address', ''), data.get('category_id'), tags, data.get('price_info', ''), data.get('url', ''), event_id)
     )
     conn.commit()
     conn.close()
@@ -828,14 +929,7 @@ def get_subscribed_events():
         conditions.append(f"e.id IN ({','.join(['?'] * len(event_ids))})")
         params.extend(event_ids)
     
-    # Host subscriptions
-    if 'host' in subscriptions and subscriptions['host']:
-        host_conditions = []
-        for host in subscriptions['host']:
-            host_conditions.append("e.host LIKE ?")
-            params.append(f'%{host}%')
-        if host_conditions:
-            conditions.append(f"({' OR '.join(host_conditions)})")
+    # Host subscriptions removed - no longer supported
     
     # Venue subscriptions
     if 'venue' in subscriptions and subscriptions['venue']:
@@ -879,9 +973,7 @@ def get_subscription_suggestions():
     """Get subscription suggestions based on existing events"""
     conn = get_db_connection()
     
-    # Get unique hosts
-    cursor = conn.execute('SELECT DISTINCT host FROM events WHERE host IS NOT NULL AND host != ""')
-    hosts = [row['host'] for row in cursor.fetchall()]
+    # Host field removed - no longer supported
     
     # Get unique venues
     cursor = conn.execute('SELECT DISTINCT location FROM events WHERE location IS NOT NULL AND location != ""')
@@ -901,7 +993,6 @@ def get_subscription_suggestions():
     conn.close()
     
     return jsonify({
-        'hosts': hosts,
         'venues': venues,
         'tags': list(all_tags)
     })
@@ -972,6 +1063,322 @@ def get_sync_status():
     except Exception as e:
         app.logger.error(f"Sync status error: {str(e)}")
         return jsonify({'error': f'Failed to get sync status: {str(e)}'}), 500
+
+# Scraper API Routes
+@app.route('/api/scraper/urls', methods=['GET'])
+@login_required
+def get_monitored_urls():
+    """Get all monitored URLs"""
+    try:
+        conn = get_db_connection()
+        urls = conn.execute('''
+            SELECT id, url, name, enabled, scrape_frequency, last_scraped, created_at
+            FROM monitored_urls 
+            ORDER BY created_at DESC
+        ''').fetchall()
+        
+        return jsonify([dict(url) for url in urls])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/urls', methods=['POST'])
+@login_required
+def add_monitored_url():
+    """Add a new URL to monitor"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        name = data.get('name', '').strip()
+        scrape_frequency = data.get('scrape_frequency', 'daily')
+        
+        if not url:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        # Basic URL validation
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        conn = get_db_connection()
+        conn.execute('''
+            INSERT INTO monitored_urls (url, name, scrape_frequency)
+            VALUES (?, ?, ?)
+        ''', (url, name or url, scrape_frequency))
+        conn.commit()
+        
+        return jsonify({'message': 'URL added successfully'}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'URL already exists'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/urls/<int:url_id>', methods=['PUT'])
+@login_required
+def update_monitored_url(url_id):
+    """Update a monitored URL"""
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        enabled = data.get('enabled', True)
+        scrape_frequency = data.get('scrape_frequency', 'daily')
+        
+        conn = get_db_connection()
+        conn.execute('''
+            UPDATE monitored_urls 
+            SET name = ?, enabled = ?, scrape_frequency = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (name, enabled, scrape_frequency, url_id))
+        conn.commit()
+        
+        return jsonify({'message': 'URL updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/urls/<int:url_id>', methods=['DELETE'])
+@login_required
+def delete_monitored_url(url_id):
+    """Delete a monitored URL"""
+    try:
+        conn = get_db_connection()
+        conn.execute('DELETE FROM monitored_urls WHERE id = ?', (url_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'URL deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/logs', methods=['GET'])
+@login_required
+def get_scraper_logs():
+    """Get scraper activity logs"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        conn = get_db_connection()
+        logs = conn.execute('''
+            SELECT sl.*, mu.url, mu.name
+            FROM scraper_logs sl
+            LEFT JOIN monitored_urls mu ON sl.url_id = mu.id
+            ORDER BY sl.created_at DESC
+            LIMIT ?
+        ''', (limit,)).fetchall()
+        
+        return jsonify([dict(log) for log in logs])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/events', methods=['GET'])
+@login_required
+def get_scraped_events():
+    """Get events pending review"""
+    try:
+        status = request.args.get('status', 'pending')
+        conn = get_db_connection()
+        events = conn.execute('''
+            SELECT se.*, mu.url as source_url, mu.name as source_name
+            FROM scraped_events se
+            LEFT JOIN monitored_urls mu ON se.url_id = mu.id
+            WHERE se.status = ?
+            ORDER BY se.created_at DESC
+        ''', (status,)).fetchall()
+        
+        return jsonify([dict(event) for event in events])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/events/<int:event_id>/approve', methods=['POST'])
+@login_required
+def approve_scraped_event(event_id):
+    """Approve a scraped event and add it to the main events table"""
+    try:
+        conn = get_db_connection()
+        
+        # Get the scraped event
+        scraped_event = conn.execute('''
+            SELECT * FROM scraped_events WHERE id = ?
+        ''', (event_id,)).fetchone()
+        
+        if not scraped_event:
+            return jsonify({'error': 'Event not found'}), 404
+        
+        # Add to main events table with tracking data
+        cursor = conn.execute('''
+            INSERT INTO events (title, start_datetime, description, location, location_name, address, price_info, url, event_hash, confidence_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            scraped_event['title'],
+            scraped_event['start_datetime'],
+            scraped_event['description'],
+            scraped_event['location'],
+            scraped_event.get('location_name', ''),
+            scraped_event.get('address', ''),
+            scraped_event['price_info'],
+            scraped_event['url'],
+            scraped_event.get('event_hash', ''),
+            scraped_event.get('confidence_score', 0.0)
+        ))
+        
+        new_event_id = cursor.lastrowid
+        
+        # Update scraped event status
+        conn.execute('''
+            UPDATE scraped_events SET status = 'approved' WHERE id = ?
+        ''', (event_id,))
+        
+        conn.commit()
+        
+        # Log the approval
+        conn.execute('''
+            INSERT INTO scraper_logs (url_id, status, message, events_found, events_added)
+            VALUES (?, 'success', 'Event approved and added to calendar', 0, 1)
+        ''', (scraped_event['url_id'],))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'message': 'Event approved and added successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/events/<int:event_id>/reject', methods=['POST'])
+@login_required
+def reject_scraped_event(event_id):
+    """Reject a scraped event"""
+    try:
+        conn = get_db_connection()
+        conn.execute('''
+            UPDATE scraped_events SET status = 'rejected' WHERE id = ?
+        ''', (event_id,))
+        conn.commit()
+        
+        return jsonify({'message': 'Event rejected'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/run', methods=['POST'])
+@login_required
+def run_scraper():
+    """Manually trigger scraper for all enabled URLs"""
+    try:
+        from scraper_service import ScraperService
+        scraper = ScraperService()
+        result = scraper.run_scraping_cycle()
+        
+        return jsonify({
+            'message': 'Scraping cycle completed',
+            'results': result
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scraper/test-thingstodo', methods=['POST'])
+@login_required
+def test_thingstodo_scraper():
+    """Test the ThingsToDo scraper with a specific URL"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        from scraper_service import ScraperService
+        scraper = ScraperService()
+        
+        if not scraper.is_thingstodo_url(url):
+            return jsonify({'error': 'URL must be from thingstododc.com'}), 400
+        
+        events = scraper.scrape_thingstodo_event(url)
+        
+        return jsonify({
+            'message': 'Scraping completed',
+            'url': url,
+            'events_found': len(events),
+            'events': events
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/import/washington-post', methods=['POST'])
+@login_required
+def import_washington_post_events():
+    """Import events from Washington Post events file"""
+    try:
+        from washington_post_parser import WashingtonPostParser
+        
+        # Get the file content from the request
+        data = request.get_json()
+        file_content = data.get('content', '').strip()
+        
+        if not file_content:
+            return jsonify({'error': 'File content is required'}), 400
+        
+        # Parse the events
+        parser = WashingtonPostParser()
+        events = parser.parse_content(file_content)
+        
+        if not events:
+            return jsonify({'error': 'No valid events found in the file'}), 400
+        
+        # Convert to dict format for database insertion
+        events_data = parser.to_dict_list()
+        
+        # Insert events into database
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        imported_count = 0
+        skipped_count = 0
+        
+        for event_data in events_data:
+            try:
+                # Check if event already exists (by title and date)
+                cursor.execute('''
+                    SELECT id FROM events 
+                    WHERE title = ? AND start_datetime = ?
+                ''', (event_data['title'], event_data['start_datetime']))
+                
+                if cursor.fetchone():
+                    skipped_count += 1
+                    continue
+                
+                # Insert new event
+                cursor.execute('''
+                    INSERT INTO events (
+                        title, start_datetime, end_datetime, description,
+                        location_name, address, price_info, url, tags, category_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    event_data['title'],
+                    event_data['start_datetime'],
+                    event_data['end_datetime'],
+                    event_data['description'],
+                    event_data['location_name'],
+                    event_data['address'],
+                    event_data['price_info'],
+                    event_data['url'],
+                    event_data['tags'],
+                    1,  # Default to Literature category
+                    datetime.now().isoformat()
+                ))
+                
+                imported_count += 1
+                
+            except Exception as e:
+                print(f"Error importing event '{event_data.get('title', 'Unknown')}': {e}")
+                skipped_count += 1
+                continue
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'message': 'Import completed',
+            'imported': imported_count,
+            'skipped': skipped_count,
+            'total_parsed': len(events)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     init_db()

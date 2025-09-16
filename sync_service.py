@@ -110,8 +110,8 @@ class SyncService:
             
             cursor.execute('''
                 INSERT INTO events 
-                (title, start_datetime, description, location, category_id, tags, host, price_info, last_sync_timestamp, sync_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (title, start_datetime, description, location, category_id, tags, host, price_info, last_sync_timestamp, sync_hash, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 event_data['title'],
                 start_datetime,
@@ -122,7 +122,8 @@ class SyncService:
                 event_data.get('host', ''),
                 event_data.get('price', 'Free'),
                 datetime.now().isoformat(),
-                self._generate_sync_hash(event_data)
+                self._generate_sync_hash(event_data),
+                datetime.now().isoformat()
             ))
             
             event_id = cursor.lastrowid

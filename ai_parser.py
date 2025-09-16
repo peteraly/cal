@@ -66,7 +66,6 @@ class EventParser:
         - location: string (if mentioned)
         - description: string (brief description if not obvious from title)
         - price: string (price information)
-        - host: string (host/organizer)
         - url: string (if mentioned)
         - tags: array of strings (relevant tags like "Art", "Music", "Free")
         
@@ -75,7 +74,7 @@ class EventParser:
         {{"title": "Team sync with Sam", "date": "2025-09-17", "time": "10:00", "location": "Zoom", "description": "Team synchronization meeting", "tags": ["Meeting", "Online"]}}
         
         "National Gallery Nights at the National Gallery of Art, 6 to 9 p.m. Free" ->
-        {{"title": "National Gallery Nights", "date": "2025-09-11", "time": "18:00", "endTime": "21:00", "location": "National Gallery of Art", "description": "After-hours gallery program", "price": "Free", "host": "National Gallery of Art", "tags": ["Art", "Evening", "Free"]}}
+        {{"title": "National Gallery Nights", "date": "2025-09-11", "time": "18:00", "endTime": "21:00", "location": "National Gallery of Art", "description": "After-hours gallery program", "price": "Free", "tags": ["Art", "Evening", "Free"]}}
         """
         
         response = self.openai_client.ChatCompletion.create(
@@ -102,7 +101,6 @@ class EventParser:
             "location": "",
             "description": "",
             "price": "",
-            "host": "",
             "url": "",
             "tags": []
         }
@@ -116,7 +114,6 @@ class EventParser:
         result["time"], result["endTime"] = self._extract_time_range(cleaned_text)
         result["location"] = self._extract_location(cleaned_text)
         result["price"] = self._extract_price(cleaned_text)
-        result["host"] = self._extract_host(cleaned_text)
         result["url"] = self._extract_url(cleaned_text)
         result["description"] = self._extract_description(cleaned_text)
         result["tags"] = self._extract_tags(cleaned_text)
@@ -176,17 +173,6 @@ class EventParser:
             if 'national gallery nights is also scheduled' in result["location"].lower():
                 result["location"] = 'National Gallery of Art'
         
-        # Host validation - if host is same as location, that's usually correct
-        if not result["host"] and result["location"]:
-            # Check if location contains organization name
-            if any(org_word in result["location"].lower() for org_word in ['gallery', 'museum', 'theater', 'center', 'university', 'college']):
-                result["host"] = result["location"]
-        
-        # Clean up host if it's too long
-        if result["host"] and len(result["host"]) > 100:
-            # Try to extract just the organization name
-            if 'National Gallery of Art' in result["host"]:
-                result["host"] = 'National Gallery of Art'
         
         # Description cleanup - remove redundant information
         if result["description"]:
@@ -680,23 +666,6 @@ class EventParser:
         
         return ""
     
-    def _extract_host(self, text: str) -> str:
-        """Extract host/organizer information."""
-        host_patterns = [
-            r'([A-Z][^.!?]*(?:Gallery|Museum|Theater|Center|Building|Hall|Room|Plaza|Park)[^.!?]*)',
-            r'hosted\s+by\s+([^.!?]+)',
-            r'presented\s+by\s+([^.!?]+)',
-            r'organized\s+by\s+([^.!?]+)',
-        ]
-        
-        for pattern in host_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                host = match.group(1).strip()
-                if len(host) > 5:
-                    return host
-        
-        return ""
     
     def _extract_url(self, text: str) -> str:
         """Extract URLs from the text."""

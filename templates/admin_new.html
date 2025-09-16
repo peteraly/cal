@@ -38,6 +38,11 @@
                         class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
                     📅 Events
                 </button>
+                <button @click="activeTab = 'scraper'" 
+                        :class="{'border-blue-500 text-blue-600': activeTab === 'scraper', 'border-transparent text-gray-500': activeTab !== 'scraper'}"
+                        class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
+                    🤖 Scraper
+                </button>
                 <button @click="activeTab = 'map'" 
                         :class="{'border-blue-500 text-blue-600': activeTab === 'map', 'border-transparent text-gray-500': activeTab !== 'map'}"
                         class="flex-1 py-3 px-4 text-center border-b-2 font-medium text-sm touch-manipulation">
@@ -62,13 +67,16 @@
                             <div class="flex items-start justify-between">
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center space-x-2 mb-1">
-                                        <div class="text-sm font-medium text-gray-900" x-text="formatTime(event.start_datetime)"></div>
+                                        <div class="text-sm font-medium text-gray-900" x-text="formatTimeRange(event)"></div>
                                         <div x-show="event.category_color" 
                                              class="w-3 h-3 rounded-full" 
                                              :style="'background-color: ' + event.category_color"></div>
                                     </div>
                                     <div class="text-sm font-medium text-gray-900 mb-1" x-text="event.title"></div>
-                                    <div x-show="event.location" class="text-xs text-gray-500 mb-1" x-text="event.location"></div>
+                                    <div x-show="event.location_name || event.address" class="text-xs text-gray-500 mb-1">
+                                        <div x-show="event.location_name" class="font-medium" x-text="event.location_name"></div>
+                                        <div x-show="event.address" class="text-gray-600" x-text="event.address"></div>
+                                    </div>
                                     <div x-show="event.url" class="text-xs text-blue-600 mb-1">
                                         <a :href="event.url" target="_blank" class="hover:underline flex items-center">
                                             <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -111,6 +119,169 @@
                             class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium touch-manipulation">
                         Add Your First Event
                     </button>
+                </div>
+            </div>
+            
+            <!-- Scraper View -->
+            <div x-show="activeTab === 'scraper'" class="p-4">
+                <div class="mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-2">🤖 Automated Event Scraper</h2>
+                    <p class="text-sm text-gray-600">Monitor websites and automatically discover events</p>
+                </div>
+                
+                <!-- Add URL Section -->
+                <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h3 class="text-sm font-medium text-blue-900 mb-3">Add New URL to Monitor</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <input type="url" x-model="newUrl.url" 
+                                   placeholder="https://example.com/events"
+                                   class="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <input type="text" x-model="newUrl.name" 
+                                       placeholder="Friendly name (optional)"
+                                       class="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <select x-model="newUrl.frequency" 
+                                        class="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    <option value="hourly">Every Hour</option>
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button @click="addMonitoredUrl()" 
+                                :disabled="!newUrl.url.trim() || addingUrl"
+                                :class="!newUrl.url.trim() || addingUrl ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'"
+                                class="w-full px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            <span x-show="!addingUrl">Add URL</span>
+                            <span x-show="addingUrl">Adding...</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Monitored URLs List -->
+                <div class="mb-6">
+                    <h3 class="text-sm font-medium text-gray-800 mb-3">Monitored URLs</h3>
+                    <div class="space-y-2">
+                        <template x-for="url in monitoredUrls" :key="url.id">
+                            <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center space-x-2">
+                                        <div class="text-sm font-medium text-gray-900" x-text="url.name || url.url"></div>
+                                        <span x-show="url.enabled" class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">Active</span>
+                                        <span x-show="!url.enabled" class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">Disabled</span>
+                                    </div>
+                                    <div class="text-xs text-gray-500 truncate" x-text="url.url"></div>
+                                    <div class="text-xs text-gray-400" x-text="'Last scraped: ' + (url.last_scraped || 'Never')"></div>
+                                </div>
+                                <div class="flex items-center space-x-1 ml-2">
+                                    <button @click="toggleUrl(url)" 
+                                            class="p-1 text-gray-400 hover:text-blue-600 touch-manipulation">
+                                        <svg x-show="url.enabled" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                        <svg x-show="!url.enabled" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                    <button @click="deleteUrl(url.id)" 
+                                            class="p-1 text-gray-400 hover:text-red-600 touch-manipulation">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <!-- Empty State -->
+                        <div x-show="monitoredUrls.length === 0" class="text-center py-8">
+                            <div class="text-gray-400 text-4xl mb-2">🤖</div>
+                            <p class="text-gray-500 text-sm">No URLs being monitored yet</p>
+                            <p class="text-gray-400 text-xs">Add a URL above to start automated event discovery</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manual Scrape Button -->
+                <div class="mb-6">
+                    <button @click="runScraper()" 
+                            :disabled="runningScraper || monitoredUrls.length === 0"
+                            :class="runningScraper || monitoredUrls.length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'"
+                            class="w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors">
+                        <span x-show="!runningScraper">🚀 Run Scraper Now</span>
+                        <span x-show="runningScraper">⏳ Scraping...</span>
+                    </button>
+                </div>
+                
+                <!-- Pending Events -->
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-800">Pending Events</h3>
+                        <span class="text-xs text-gray-500" x-text="`${pendingEvents.length} events awaiting review`"></span>
+                    </div>
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        <template x-for="event in pendingEvents" :key="event.id">
+                            <div class="p-3 bg-white border border-gray-200 rounded-lg">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-medium text-gray-900 mb-1" x-text="event.title"></div>
+                                        <div class="text-xs text-gray-500 mb-1" x-text="event.source_name"></div>
+                                        <div class="text-xs text-gray-400" x-text="event.start_datetime"></div>
+                                        <div x-show="event.location_name || event.address" class="text-xs text-gray-500">
+                                            <div x-show="event.location_name" class="font-medium" x-text="event.location_name"></div>
+                                            <div x-show="event.address" class="text-gray-600" x-text="event.address"></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-1 ml-2">
+                                        <button @click="approveEvent(event.id)" 
+                                                class="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">
+                                            ✓
+                                        </button>
+                                        <button @click="rejectEvent(event.id)" 
+                                                class="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
+                                            ✗
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <!-- Empty State -->
+                        <div x-show="pendingEvents.length === 0" class="text-center py-4">
+                            <div class="text-gray-400 text-2xl mb-1">📋</div>
+                            <p class="text-gray-500 text-xs">No pending events</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Activity Log -->
+                <div>
+                    <h3 class="text-sm font-medium text-gray-800 mb-3">Activity Log</h3>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+                        <div class="space-y-2">
+                            <template x-for="log in activityLogs" :key="log.id">
+                                <div class="flex items-start space-x-2 text-xs">
+                                    <div class="flex-shrink-0 w-2 h-2 rounded-full mt-1.5"
+                                         :class="log.status === 'success' ? 'bg-green-500' : log.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-gray-900" x-text="log.message"></div>
+                                        <div class="text-gray-500" x-text="log.created_at"></div>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <!-- Empty State -->
+                            <div x-show="activityLogs.length === 0" class="text-center py-4">
+                                <div class="text-gray-400 text-lg mb-1">📊</div>
+                                <p class="text-gray-500 text-xs">No activity yet</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -185,8 +356,11 @@
                             <div class="flex items-start justify-between">
                                 <div class="flex-1 min-w-0">
                                     <div class="text-sm font-medium text-gray-900 mb-1" x-text="event.title"></div>
-                                    <div class="text-xs text-gray-500 mb-1" x-text="event.location"></div>
-                                    <div class="text-xs text-gray-400" x-text="formatDate(event.start_datetime) + ' at ' + formatTime(event.start_datetime)"></div>
+                                    <div x-show="event.location_name || event.address" class="text-xs text-gray-500 mb-1">
+                                        <div x-show="event.location_name" class="font-medium" x-text="event.location_name"></div>
+                                        <div x-show="event.address" class="text-gray-600" x-text="event.address"></div>
+                                    </div>
+                                    <div class="text-xs text-gray-400" x-text="formatDate(event.start_datetime) + ' at ' + formatTimeRange(event)"></div>
                                 </div>
                                 <div class="flex items-center space-x-1 ml-2">
                                     <button @click="editEvent(event)" 
@@ -267,7 +441,6 @@
                             <div><span class="font-medium">Time:</span> <span x-text="parseResult?.time || 'Not detected'"></span></div>
                             <div><span class="font-medium">Location:</span> <span x-text="parseResult?.location || 'Not detected'"></span></div>
                             <div><span class="font-medium">Price:</span> <span x-text="parseResult?.price || 'Not detected'"></span></div>
-                            <div><span class="font-medium">Host:</span> <span x-text="parseResult?.host || 'Not detected'"></span></div>
                             <div><span class="font-medium">URL:</span> <span x-text="parseResult?.url || 'Not detected'"></span></div>
                         </div>
                         <button type="button" @click="applyParsedData()" 
@@ -294,49 +467,76 @@
                                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Time *</label>
-                            <div class="flex space-x-2">
-                                <input type="time" x-model="eventForm.time" required
-                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                <select x-model="eventForm.timeFormat" @change="convertTimeFormat()"
-                                        class="w-16 border border-gray-300 rounded-md px-2 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                    <option value="24">24h</option>
-                                    <option value="12">12h</option>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="eventForm.hour" min="1" max="12" required
+                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                       placeholder="Hour">
+                                <span class="text-gray-500 self-center">:</span>
+                                <input type="number" x-model="eventForm.minute" min="0" max="59" required
+                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                       placeholder="Min">
+                                <select x-model="eventForm.ampm" required
+                                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
                                 </select>
                             </div>
-                            <div x-show="eventForm.timeFormat === '12'" class="mt-1 text-xs text-gray-600" x-text="getDisplayTime()"></div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">End Time (Optional)</label>
+                            <div class="flex gap-2">
+                                <input type="number" x-model="eventForm.endHour" min="1" max="12"
+                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                       placeholder="Hour">
+                                <span class="text-gray-500 self-center">:</span>
+                                <input type="number" x-model="eventForm.endMinute" min="0" max="59"
+                                       class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                       placeholder="Min">
+                                <select x-model="eventForm.endAmpm"
+                                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
                         <div class="space-y-2">
-                            <input type="text" x-model="eventForm.location" @input="updateLocationPreview()"
-                                   placeholder="Enter the venue or address"
+                            <input type="text" x-model="eventForm.location_name"
+                                   placeholder="Location name (e.g., The Royal Embassy of Saudi Arabia)"
                                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
                             
-                            <!-- Map Preview -->
-                            <div x-show="eventForm.location && eventForm.location.trim()" 
-                                 class="border border-gray-200 rounded-md overflow-hidden">
-                                <div class="bg-gray-50 px-3 py-2 text-xs text-gray-600 border-b">
-                                    📍 Location Preview
+                            <div class="relative">
+                                <input type="text" x-model="eventForm.address"
+                                       placeholder="Address (e.g., 601 New Hampshire Avenue, NW, Washington, DC)"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                       @input="searchAddresses()"
+                                       @focus="showAddressSuggestions = true"
+                                       @blur="setTimeout(() => showAddressSuggestions = false, 200)">
+                                
+                                <!-- Address Suggestions Dropdown -->
+                                <div x-show="showAddressSuggestions && addressSuggestions.length > 0" 
+                                     class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                    <template x-for="suggestion in addressSuggestions" :key="suggestion">
+                                        <div @click="selectAddress(suggestion)" 
+                                             class="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm border-b border-gray-100 last:border-b-0"
+                                             x-text="suggestion"></div>
+                                    </template>
                                 </div>
-                                <div id="location-preview-map" class="h-32 bg-gray-100 flex items-center justify-center">
-                                    <div class="text-center text-gray-500">
-                                        <div class="text-2xl mb-1">🗺️</div>
-                                        <div class="text-xs">Map preview loading...</div>
                                     </div>
-                                </div>
+                            
+                            <!-- Combined Location Display -->
+                            <div x-show="eventForm.location_name || eventForm.address" class="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                                <div x-show="eventForm.location_name" class="font-medium" x-text="eventForm.location_name"></div>
+                                <div x-show="eventForm.address" class="text-gray-600" x-text="eventForm.address"></div>
                             </div>
                         </div>
                     </div>
                     
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Host/Organizer</label>
-                        <input type="text" x-model="eventForm.host"
-                               placeholder="Who is organizing this event?"
-                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm">
-                    </div>
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Price Information</label>
@@ -385,19 +585,42 @@
             </div>
             
             <div class="space-y-4">
+                <!-- Import Type Selection -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Paste Event Information</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Import Type</label>
+                    <div class="flex space-x-2">
+                        <button @click="importType = 'general'" 
+                                :class="importType === 'general' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'"
+                                class="flex-1 px-3 py-2 rounded-md text-sm font-medium touch-manipulation">
+                            General Text
+                        </button>
+                        <button @click="importType = 'washington_post'" 
+                                :class="importType === 'washington_post' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'"
+                                class="flex-1 px-3 py-2 rounded-md text-sm font-medium touch-manipulation">
+                            Washington Post
+                        </button>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <span x-show="importType === 'general'">Paste Event Information</span>
+                        <span x-show="importType === 'washington_post'">Paste Washington Post Events File Content</span>
+                    </label>
                     <textarea x-model="bulkImportText" rows="8"
-                              placeholder="Paste your event information here..."
+                              :placeholder="importType === 'general' ? 'Paste your event information here...' : 'Paste the Washington Post events file content here...'"
                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"></textarea>
                 </div>
                 
                 <div class="flex space-x-2">
-                    <button @click="extractEvents()" 
+                    <button @click="importType === 'general' ? extractEvents() : importWashingtonPostEvents()" 
                             :disabled="!bulkImportText.trim() || extracting"
                             class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 text-sm touch-manipulation">
-                        <span x-show="!extracting">Extract Events</span>
-                        <span x-show="extracting">Extracting...</span>
+                        <span x-show="!extracting">
+                            <span x-show="importType === 'general'">Extract Events</span>
+                            <span x-show="importType === 'washington_post'">Import WP Events</span>
+                        </span>
+                        <span x-show="extracting">Processing...</span>
                     </button>
                     <button @click="clearBulkImport()" 
                             class="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 text-sm touch-manipulation">
@@ -509,25 +732,44 @@ function adminApp() {
         showBulkImportModal: false,
         editingEventId: null,
         saving: false,
-        activeTab: 'events',
+        _activeTab: 'events',
         currentDate: new Date(),
         selectedDate: null,
         bulkImportText: '',
+        importType: 'general',
         extracting: false,
         toasts: [],
         locationPreviewMap: null,
+        showAddressSuggestions: false,
+        addressSuggestions: [],
         // Parser-related properties
         showParseSection: false,
         parseInput: '',
         parseResult: null,
         isParsing: false,
+        // Scraper-related properties
+        monitoredUrls: [],
+        pendingEvents: [],
+        activityLogs: [],
+        newUrl: {
+            url: '',
+            name: '',
+            frequency: 'daily'
+        },
+        addingUrl: false,
+        runningScraper: false,
         eventForm: {
             title: '',
             date: '',
-            time: '',
-            timeFormat: '24',
+            hour: '',
+            minute: '',
+            ampm: 'AM',
+            endHour: '',
+            endMinute: '',
+            endAmpm: 'AM',
             location: '',
-            host: '',
+            location_name: '',
+            address: '',
             price_info: '',
             url: '',
             description: ''
@@ -538,7 +780,11 @@ function adminApp() {
         },
         
         get eventsWithLocations() {
-            return this.events.filter(event => event.location && event.location.trim() !== '');
+            return this.events.filter(event => 
+                (event.location && event.location.trim() !== '') ||
+                (event.location_name && event.location_name.trim() !== '') ||
+                (event.address && event.address.trim() !== '')
+            );
         },
         
         get currentMonthYear() {
@@ -597,9 +843,34 @@ function adminApp() {
         async saveEvent() {
             this.saving = true;
             try {
+                // Convert AM/PM format to 24-hour format for start time
+                let hour24 = parseInt(this.eventForm.hour);
+                if (this.eventForm.ampm === 'AM' && hour24 === 12) {
+                    hour24 = 0;
+                } else if (this.eventForm.ampm === 'PM' && hour24 !== 12) {
+                    hour24 += 12;
+                }
+                
+                const startTime24 = `${hour24.toString().padStart(2, '0')}:${this.eventForm.minute.padStart(2, '0')}`;
+                
+                // Convert AM/PM format to 24-hour format for end time (if provided)
+                let endDatetime = '';
+                if (this.eventForm.endHour && this.eventForm.endMinute) {
+                    let endHour24 = parseInt(this.eventForm.endHour);
+                    if (this.eventForm.endAmpm === 'AM' && endHour24 === 12) {
+                        endHour24 = 0;
+                    } else if (this.eventForm.endAmpm === 'PM' && endHour24 !== 12) {
+                        endHour24 += 12;
+                    }
+                    
+                    const endTime24 = `${endHour24.toString().padStart(2, '0')}:${this.eventForm.endMinute.padStart(2, '0')}`;
+                    endDatetime = `${this.eventForm.date}T${endTime24}:00`;
+                }
+                
                 const eventData = {
                     ...this.eventForm,
-                    start_datetime: `${this.eventForm.date}T${this.eventForm.time}:00`
+                    start_datetime: `${this.eventForm.date}T${startTime24}:00`,
+                    end_datetime: endDatetime
                 };
                 
                 const url = this.showAddEventModal ? '/api/events' : `/api/events/${this.editingEventId}`;
@@ -651,13 +922,59 @@ function adminApp() {
         
         editEvent(event) {
             this.editingEventId = event.id;
+            
+            // Convert 24-hour time to AM/PM format for start time
+            const eventDate = new Date(event.start_datetime);
+            let hour = eventDate.getHours();
+            const minute = eventDate.getMinutes();
+            let ampm = 'AM';
+            
+            if (hour === 0) {
+                hour = 12;
+            } else if (hour === 12) {
+                ampm = 'PM';
+            } else if (hour > 12) {
+                hour = hour - 12;
+                ampm = 'PM';
+            }
+            
+            // Convert 24-hour time to AM/PM format for end time (if exists)
+            let endHour = '';
+            let endMinute = '';
+            let endAmpm = 'AM';
+            
+            if (event.end_datetime) {
+                const endDate = new Date(event.end_datetime);
+                let endHour24 = endDate.getHours();
+                const endMinute24 = endDate.getMinutes();
+                
+                if (endHour24 === 0) {
+                    endHour = '12';
+                } else if (endHour24 === 12) {
+                    endHour = '12';
+                    endAmpm = 'PM';
+                } else if (endHour24 > 12) {
+                    endHour = (endHour24 - 12).toString();
+                    endAmpm = 'PM';
+                } else {
+                    endHour = endHour24.toString();
+                }
+                
+                endMinute = endMinute24.toString().padStart(2, '0');
+            }
+            
             this.eventForm = {
                 title: event.title,
                 date: event.start_datetime.split('T')[0],
-                time: event.start_datetime.split('T')[1].substring(0, 5),
-                timeFormat: '24',
+                hour: hour.toString(),
+                minute: minute.toString().padStart(2, '0'),
+                ampm: ampm,
+                endHour: endHour,
+                endMinute: endMinute,
+                endAmpm: endAmpm,
                 location: event.location || '',
-                host: event.host || '',
+                location_name: event.location_name || '',
+                address: event.address || '',
                 price_info: event.price_info || '',
                 url: event.url || '',
                 description: event.description || ''
@@ -672,10 +989,15 @@ function adminApp() {
             this.eventForm = {
                 title: '',
                 date: this.getCurrentDate(),
-                time: this.getCurrentTime(),
-                timeFormat: '24',
+                hour: '',
+                minute: '',
+                ampm: 'AM',
+                endHour: '',
+                endMinute: '',
+                endAmpm: 'AM',
                 location: '',
-                host: '',
+                location_name: '',
+                address: '',
                 price_info: '',
                 url: '',
                 description: ''
@@ -733,27 +1055,70 @@ function adminApp() {
             }
             
             if (this.parseResult.time) {
-                // Parse time and set both time formats
-                const timeMatch = this.parseResult.time.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
-                if (timeMatch) {
-                    let hour = parseInt(timeMatch[1]);
-                    const minute = timeMatch[2];
-                    const ampm = timeMatch[3] ? timeMatch[3].toLowerCase() : (hour >= 12 ? 'pm' : 'am');
+                // Parse time from 24-hour format to AM/PM format
+                const timeParts = this.parseResult.time.split(':');
+                if (timeParts.length >= 2) {
+                    let hour = parseInt(timeParts[0]);
+                    const minute = timeParts[1];
                     
-                    // Convert to 24-hour format for HTML time input
-                    let hour24 = hour;
-                    if (ampm === 'pm' && hour !== 12) {
-                        hour24 = hour + 12;
-                    } else if (ampm === 'am' && hour === 12) {
-                        hour24 = 0;
+                    if (hour === 0) {
+                        hour = 12;
+                        this.eventForm.ampm = 'AM';
+                    } else if (hour < 12) {
+                        this.eventForm.ampm = 'AM';
+                    } else if (hour === 12) {
+                        this.eventForm.ampm = 'PM';
+                    } else {
+                        hour = hour - 12;
+                        this.eventForm.ampm = 'PM';
                     }
                     
-                    this.eventForm.time = `${hour24.toString().padStart(2, '0')}:${minute}`;
+                    this.eventForm.hour = hour.toString();
+                    this.eventForm.minute = minute;
+                }
+            }
+            
+            // Handle end time if available
+            if (this.parseResult.end_time) {
+                const endTimeParts = this.parseResult.end_time.split(':');
+                if (endTimeParts.length >= 2) {
+                    let endHour = parseInt(endTimeParts[0]);
+                    const endMinute = endTimeParts[1];
+                    
+                    if (endHour === 0) {
+                        endHour = 12;
+                        this.eventForm.endAmpm = 'AM';
+                    } else if (endHour < 12) {
+                        this.eventForm.endAmpm = 'AM';
+                    } else if (endHour === 12) {
+                        this.eventForm.endAmpm = 'PM';
+                    } else {
+                        endHour = endHour - 12;
+                        this.eventForm.endAmpm = 'PM';
+                    }
+                    
+                    this.eventForm.endHour = endHour.toString();
+                    this.eventForm.endMinute = endMinute;
                 }
             }
             
             if (this.parseResult.location) {
-                this.eventForm.location = this.parseResult.location;
+                // Try to parse location into name and address
+                const location = this.parseResult.location;
+                
+                // Check if it looks like an address (contains numbers and street indicators)
+                const addressPattern = /\d+\s+[A-Za-z\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Place|Pl|Court|Ct|NW|NE|SW|SE)/i;
+                
+                if (addressPattern.test(location)) {
+                    // It's an address
+                    this.eventForm.address = location;
+                } else {
+                    // It's a location name
+                    this.eventForm.location_name = location;
+                }
+                
+                // Keep the original location field for backward compatibility
+                this.eventForm.location = location;
             }
             
             if (this.parseResult.description) {
@@ -764,9 +1129,6 @@ function adminApp() {
                 this.eventForm.price_info = this.parseResult.price;
             }
             
-            if (this.parseResult.host) {
-                this.eventForm.host = this.parseResult.host;
-            }
             
             if (this.parseResult.url) {
                 this.eventForm.url = this.parseResult.url;
@@ -782,65 +1144,212 @@ function adminApp() {
             this.isParsing = false;
         },
         
-        // Time Format Functions
-        convertTimeFormat() {
-            if (!this.eventForm.time) return;
-            
-            const [hours, minutes] = this.eventForm.time.split(':');
-            const hour = parseInt(hours);
-            
-            if (this.eventForm.timeFormat === '12') {
-                // Convert 24h to 12h display
-                let displayHour = hour;
-                let ampm = 'AM';
-                
-                if (hour === 0) {
-                    displayHour = 12;
-                } else if (hour === 12) {
-                    ampm = 'PM';
-                } else if (hour > 12) {
-                    displayHour = hour - 12;
-                    ampm = 'PM';
+        // Scraper Functions
+        async loadScraperData() {
+            try {
+                // Load monitored URLs
+                const urlsResponse = await fetch('/api/scraper/urls');
+                if (urlsResponse.ok) {
+                    this.monitoredUrls = await urlsResponse.json();
                 }
                 
-                this.displayTime = `${displayHour}:${minutes} ${ampm}`;
-            } else {
-                this.displayTime = this.eventForm.time;
+                // Load pending events
+                const eventsResponse = await fetch('/api/scraper/events?status=pending');
+                if (eventsResponse.ok) {
+                    this.pendingEvents = await eventsResponse.json();
+                }
+                
+                // Load activity logs
+                const logsResponse = await fetch('/api/scraper/logs?limit=20');
+                if (logsResponse.ok) {
+                    this.activityLogs = await logsResponse.json();
+                }
+            } catch (error) {
+                console.error('Error loading scraper data:', error);
             }
         },
         
-        getDisplayTime() {
-            if (!this.eventForm.time) return '';
+        async addMonitoredUrl() {
+            if (!this.newUrl.url.trim()) return;
             
-            const [hours, minutes] = this.eventForm.time.split(':');
-            const hour = parseInt(hours);
-            
-            let displayHour = hour;
-            let ampm = 'AM';
-            
-            if (hour === 0) {
-                displayHour = 12;
-            } else if (hour === 12) {
-                ampm = 'PM';
-            } else if (hour > 12) {
-                displayHour = hour - 12;
-                ampm = 'PM';
+            this.addingUrl = true;
+            try {
+                const response = await fetch('/api/scraper/urls', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.newUrl)
+                });
+                
+                if (response.ok) {
+                    this.showToast('URL added successfully!', 'success');
+                    this.newUrl = { url: '', name: '', frequency: 'daily' };
+                    await this.loadScraperData();
+                } else {
+                    const error = await response.json();
+                    this.showToast(error.error || 'Failed to add URL', 'error');
+                }
+            } catch (error) {
+                console.error('Error adding URL:', error);
+                this.showToast('Error adding URL', 'error');
+            } finally {
+                this.addingUrl = false;
             }
-            
-            return `${displayHour}:${minutes} ${ampm}`;
         },
+        
+        async toggleUrl(url) {
+            try {
+                const response = await fetch(`/api/scraper/urls/${url.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: url.name,
+                        enabled: !url.enabled,
+                        scrape_frequency: url.scrape_frequency
+                    })
+                });
+                
+                if (response.ok) {
+                    await this.loadScraperData();
+                    this.showToast(`URL ${url.enabled ? 'disabled' : 'enabled'}`, 'success');
+                } else {
+                    this.showToast('Failed to update URL', 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling URL:', error);
+                this.showToast('Error updating URL', 'error');
+            }
+        },
+        
+        async deleteUrl(urlId) {
+            if (!confirm('Are you sure you want to delete this URL?')) return;
+            
+            try {
+                const response = await fetch(`/api/scraper/urls/${urlId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    this.showToast('URL deleted successfully', 'success');
+                    await this.loadScraperData();
+                } else {
+                    this.showToast('Failed to delete URL', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting URL:', error);
+                this.showToast('Error deleting URL', 'error');
+            }
+        },
+        
+        async runScraper() {
+            this.runningScraper = true;
+            try {
+                const response = await fetch('/api/scraper/run', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    this.showToast('Scraping completed!', 'success');
+                    await this.loadScraperData();
+                } else {
+                    const error = await response.json();
+                    this.showToast(error.error || 'Scraping failed', 'error');
+                }
+            } catch (error) {
+                console.error('Error running scraper:', error);
+                this.showToast('Error running scraper', 'error');
+            } finally {
+                this.runningScraper = false;
+            }
+        },
+        
+        async approveEvent(eventId) {
+            try {
+                const response = await fetch(`/api/scraper/events/${eventId}/approve`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    this.showToast('Event approved and added!', 'success');
+                    await this.loadScraperData();
+                    await this.loadEvents(); // Refresh main events list
+                } else {
+                    this.showToast('Failed to approve event', 'error');
+                }
+            } catch (error) {
+                console.error('Error approving event:', error);
+                this.showToast('Error approving event', 'error');
+            }
+        },
+        
+        async rejectEvent(eventId) {
+            if (!confirm('Are you sure you want to reject this event?')) return;
+            
+            try {
+                const response = await fetch(`/api/scraper/events/${eventId}/reject`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    this.showToast('Event rejected', 'success');
+                    await this.loadScraperData();
+                } else {
+                    this.showToast('Failed to reject event', 'error');
+                }
+            } catch (error) {
+                console.error('Error rejecting event:', error);
+                this.showToast('Error rejecting event', 'error');
+            }
+        },
+        
         
         getCurrentDate() {
             const today = new Date();
             return today.toISOString().split('T')[0];
         },
         
-        getCurrentTime() {
-            const now = new Date();
-            const hours = now.getHours().toString().padStart(2, '0');
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            return `${hours}:${minutes}`;
+        // Address suggestion functions
+        searchAddresses() {
+            const query = this.eventForm.address.toLowerCase().trim();
+            if (query.length < 2) {
+                this.addressSuggestions = [];
+                return;
+            }
+            
+            // Common DC area addresses for suggestions
+            const commonAddresses = [
+                '601 New Hampshire Avenue, NW, Washington, DC',
+                '1600 Pennsylvania Avenue, NW, Washington, DC',
+                '1 First Street, SE, Washington, DC',
+                '3501 New York Avenue, NE, Washington, DC',
+                '1100 Jefferson Drive, SW, Washington, DC',
+                '1000 Independence Avenue, SW, Washington, DC',
+                '700 Constitution Avenue, NW, Washington, DC',
+                '1400 Constitution Avenue, NW, Washington, DC',
+                '2000 L Street, NW, Washington, DC',
+                '1776 D Street, NW, Washington, DC',
+                '800 16th Street, NW, Washington, DC',
+                '1200 17th Street, NW, Washington, DC',
+                '1000 5th Street, NW, Washington, DC',
+                '555 Pennsylvania Avenue, NW, Washington, DC',
+                '1300 Pennsylvania Avenue, NW, Washington, DC'
+            ];
+            
+            this.addressSuggestions = commonAddresses.filter(addr => 
+                addr.toLowerCase().includes(query)
+            ).slice(0, 5);
         },
+        
+        selectAddress(address) {
+            this.eventForm.address = address;
+            this.showAddressSuggestions = false;
+            this.addressSuggestions = [];
+        },
+        
         
         showToast(message, type = 'info') {
             const toast = {
@@ -953,6 +1462,27 @@ function adminApp() {
             });
         },
         
+        formatTimeRange(event) {
+            const startDate = new Date(event.start_datetime);
+            const startTime = startDate.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            
+            if (event.end_datetime) {
+                const endDate = new Date(event.end_datetime);
+                const endTime = endDate.toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit',
+                    hour12: true 
+                });
+                return `${startTime} - ${endTime}`;
+            }
+            
+            return startTime;
+        },
+        
         closeBulkImportModal() {
             this.showBulkImportModal = false;
             this.bulkImportText = '';
@@ -988,6 +1518,36 @@ function adminApp() {
             }
         },
         
+        async importWashingtonPostEvents() {
+            this.extracting = true;
+            try {
+                const response = await fetch('/api/import/washington-post', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        content: this.bulkImportText
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    this.showToast(`Successfully imported ${data.imported} events! (${data.skipped} skipped)`, 'success');
+                    await this.loadEvents();
+                    this.closeBulkImportModal();
+                } else {
+                    const errorData = await response.json();
+                    this.showToast(`Error importing events: ${errorData.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error importing Washington Post events:', error);
+                this.showToast('Error importing events. Please try again.', 'error');
+            } finally {
+                this.extracting = false;
+            }
+        },
+        
         clearBulkImport() {
             this.bulkImportText = '';
         },
@@ -1013,7 +1573,18 @@ function adminApp() {
             this.loadEvents();
             // Set smart defaults for new events
             this.eventForm.date = this.getCurrentDate();
-            this.eventForm.time = this.getCurrentTime();
+        },
+        
+        // Watch for tab changes to load scraper data
+        get activeTab() {
+            return this._activeTab || 'events';
+        },
+        
+        set activeTab(value) {
+            this._activeTab = value;
+            if (value === 'scraper') {
+                this.loadScraperData();
+            }
         }
     }
 }
