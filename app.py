@@ -19,6 +19,9 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 # Database setup
 DATABASE = 'calendar.db'
 
+# Kennedy Center URL constant
+KENNEDY_CENTER_CALENDAR_URL = 'https://www.kennedy-center.org/whats-on/calendar/'
+
 # Initialize sync service
 sync_service = SyncService(DATABASE)
 
@@ -198,6 +201,12 @@ def get_db_connection():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+def ensure_kennedy_center_url(event_data):
+    """Ensure Kennedy Center events use the correct calendar URL"""
+    if event_data.get('location_name', '').find('Kennedy Center') != -1:
+        event_data['url'] = KENNEDY_CENTER_CALENDAR_URL
+    return event_data
 
 def parse_price_info(text):
     """
@@ -441,6 +450,12 @@ def admin_logout():
     session.pop('logged_in', None)
     return redirect(url_for('index'))
 
+@app.route('/admin/table')
+@login_required
+def admin_table():
+    """Admin events table dashboard"""
+    return render_template('admin_table.html')
+
 @app.route('/admin/stats')
 @login_required
 def admin_stats():
@@ -550,6 +565,36 @@ def delete_event(event_id):
     conn.close()
     
     return jsonify({'message': 'Event deleted successfully'})
+
+@app.route('/api/admin/events/bulk-delete', methods=['POST'])
+@login_required
+def bulk_delete_events():
+    """Delete multiple events"""
+    try:
+        data = request.get_json()
+        event_ids = data.get('event_ids', [])
+        
+        if not event_ids:
+            return jsonify({'error': 'No event IDs provided'}), 400
+        
+        conn = get_db_connection()
+        
+        # Create placeholders for the IN clause
+        placeholders = ','.join(['?'] * len(event_ids))
+        cursor = conn.execute(f'DELETE FROM events WHERE id IN ({placeholders})', event_ids)
+        deleted_count = cursor.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'message': f'Successfully deleted {deleted_count} events',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in bulk_delete_events: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categories')
 def get_categories():
@@ -836,6 +881,33 @@ def analyze_importance():
         return jsonify(analysis)
     except Exception as e:
         return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+
+@app.route('/api/admin/events-table')
+@login_required
+def get_events_table():
+    """Get all events in table format for admin dashboard"""
+    try:
+        conn = get_db_connection()
+        
+        # Get all events with category info
+        cursor = conn.execute('''
+            SELECT e.*, c.name as category_name, c.color as category_color 
+            FROM events e 
+            LEFT JOIN categories c ON e.category_id = c.id 
+            ORDER BY e.start_datetime DESC
+        ''')
+        
+        events = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        return jsonify({
+            'events': events,
+            'total': len(events)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in get_events_table: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/stats')
 @login_required
