@@ -7,6 +7,7 @@ import hashlib
 from dotenv import load_dotenv
 from ai_parser import EventParser, suggest_recurrence, analyze_event_importance, SearchParser
 from sync_service import SyncService
+from rss_manager import RSSManager, start_rss_scheduler, get_scheduler_status
 import json
 import re
 
@@ -24,6 +25,18 @@ KENNEDY_CENTER_CALENDAR_URL = 'https://www.kennedy-center.org/whats-on/calendar/
 
 # Initialize sync service
 sync_service = SyncService(DATABASE)
+
+# Initialize RSS manager
+rss_manager = RSSManager(DATABASE)
+
+def require_auth(f):
+    """Decorator to require admin authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'admin_logged_in' not in session:
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def init_db():
     """Initialize the database with events and categories tables"""
@@ -411,7 +424,7 @@ def login_required(f):
     """Decorator to require login for admin routes"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('logged_in'):
+        if not session.get('admin_logged_in'):
             return redirect(url_for('admin_login'))
         return f(*args, **kwargs)
     return decorated_function
@@ -437,7 +450,7 @@ def admin_login():
         # Simple password check (in production, use proper hashing)
         admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
         if username == 'admin' and password == admin_password:
-            session['logged_in'] = True
+            session['admin_logged_in'] = True
             return redirect(url_for('admin'))
         else:
             return render_template('login.html', error='Invalid credentials')
@@ -447,7 +460,7 @@ def admin_login():
 @app.route('/admin/logout')
 def admin_logout():
     """Admin logout"""
-    session.pop('logged_in', None)
+    session.pop('admin_logged_in', None)
     return redirect(url_for('index'))
 
 @app.route('/admin/table')
@@ -1452,6 +1465,283 @@ def import_washington_post_events():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# RSS Feed Management Routes
+@app.route('/admin/rss-feeds')
+@require_auth
+def rss_feeds_dashboard():
+    """RSS Feeds management dashboard"""
+    return render_template('rss_feeds.html')
+
+@app.route('/api/rss-feeds', methods=['GET'])
+@require_auth
+def get_rss_feeds():
+    """Get all RSS feeds"""
+    try:
+        feeds = rss_manager.get_all_feeds()
+        return jsonify(feeds)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds', methods=['POST'])
+@require_auth
+def add_rss_feed():
+    """Add a new RSS feed"""
+    try:
+        data = request.get_json()
+        success, message = rss_manager.add_feed(
+            name=data['name'],
+            url=data['url'],
+            description=data.get('description', ''),
+            category=data.get('category', 'General'),
+            update_interval=data.get('update_interval', 30),
+            enabled=data.get('enabled', True)
+        )
+        
+        if not success:
+            return jsonify({'error': message}), 400
+        return jsonify({'message': message})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/<int:feed_id>', methods=['PUT'])
+@require_auth
+def update_rss_feed(feed_id):
+    """Update an RSS feed"""
+    try:
+        data = request.get_json()
+        rss_manager.update_feed(feed_id, data)
+        return jsonify({'message': 'Feed updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/<int:feed_id>', methods=['DELETE'])
+@require_auth
+def delete_rss_feed(feed_id):
+    """Delete an RSS feed"""
+    try:
+        rss_manager.delete_feed(feed_id)
+        return jsonify({'message': 'Feed deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/<int:feed_id>/refresh', methods=['POST'])
+@require_auth
+def refresh_rss_feed(feed_id):
+    """Manually refresh a specific RSS feed"""
+    try:
+        result = rss_manager.refresh_feed(feed_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/refresh-all', methods=['POST'])
+@require_auth
+def refresh_all_rss_feeds():
+    """Manually refresh all RSS feeds"""
+    try:
+        result = rss_manager.refresh_all_feeds()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/logs', methods=['GET'])
+@require_auth
+def get_rss_logs():
+    """Get RSS feed logs"""
+    try:
+        logs = rss_manager.get_logs(limit=request.args.get('limit', 100))
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/categories', methods=['GET'])
+@require_auth
+def get_rss_categories():
+    """Get RSS feed categories"""
+    try:
+        categories = rss_manager.get_categories()
+        return jsonify(categories)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/events/<int:event_id>/override', methods=['POST'])
+@require_auth
+def override_event_source(event_id):
+    """Override event source (mark as manually added)"""
+    try:
+        data = request.get_json()
+        rss_manager.override_event_source(event_id, data.get('reason', 'Manual override'))
+        return jsonify({'message': 'Event source overridden successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/test', methods=['POST'])
+@require_auth
+def test_rss_feed():
+    """Test an RSS feed URL"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            return jsonify({'success': False, 'message': 'URL is required'}), 400
+        
+        # Test the feed URL
+        result = rss_manager.test_feed_url(url)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rss-feeds/analytics', methods=['GET'])
+@require_auth
+def get_rss_analytics():
+    """Get RSS feeds analytics"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Events today
+        cursor.execute('''
+            SELECT COUNT(*) FROM events 
+            WHERE DATE(created_at) = DATE('now')
+        ''')
+        events_today = cursor.fetchone()[0]
+        
+        # Events this week
+        cursor.execute('''
+            SELECT COUNT(*) FROM events 
+            WHERE DATE(created_at) >= DATE('now', '-7 days')
+        ''')
+        events_this_week = cursor.fetchone()[0]
+        
+        # Total events
+        cursor.execute('SELECT COUNT(*) FROM events')
+        total_events = cursor.fetchone()[0]
+        
+        # Feed health calculation
+        cursor.execute('''
+            SELECT 
+                COUNT(*) as total_feeds,
+                SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_feeds,
+                SUM(CASE WHEN consecutive_failures > 0 THEN 1 ELSE 0 END) as error_feeds
+            FROM rss_feeds
+        ''')
+        feed_stats = cursor.fetchone()
+        total_feeds, active_feeds, error_feeds = feed_stats
+        
+        health_score = 0
+        if active_feeds > 0:
+            health_score = max(0, 100 - (error_feeds / active_feeds * 100))
+        
+        # Average response time (estimate from logs)
+        cursor.execute('''
+            SELECT AVG(response_time_ms) FROM rss_feed_logs 
+            WHERE response_time_ms IS NOT NULL 
+            AND checked_at >= DATE('now', '-1 day')
+        ''')
+        avg_response_time = cursor.fetchone()[0] or 500
+        
+        # Recent activity
+        cursor.execute('''
+            SELECT COUNT(*) FROM rss_feed_logs 
+            WHERE DATE(checked_at) = DATE('now')
+        ''')
+        feeds_checked = cursor.fetchone()[0]
+        
+        # Last update
+        cursor.execute('''
+            SELECT MAX(checked_at) FROM rss_feed_logs
+        ''')
+        last_update = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        analytics = {
+            'eventsToday': events_today,
+            'eventsThisWeek': events_this_week,
+            'healthScore': round(health_score, 1),
+            'avgResponseTime': round(avg_response_time, 0),
+            'totalEvents': total_events,
+            'feedsChecked': feeds_checked,
+            'errorsResolved': 0,  # Could be calculated from logs
+            'avgProcessingTime': round(avg_response_time * 0.4, 0),  # Estimate
+            'lastUpdate': last_update
+        }
+        
+        return jsonify(analytics)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rss-feeds/<int:feed_id>/events', methods=['GET'])
+@require_auth
+def get_feed_events(feed_id):
+    """Get events for a specific RSS feed"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Get feed name
+        cursor.execute('SELECT name FROM rss_feeds WHERE id = ?', (feed_id,))
+        feed_result = cursor.fetchone()
+        if not feed_result:
+            return jsonify({'success': False, 'message': 'Feed not found'}), 404
+        
+        feed_name = feed_result[0]
+        
+        # Get events for this feed
+        limit = request.args.get('limit', 50)
+        cursor.execute('''
+            SELECT e.id, e.title, e.description, e.start_datetime, e.end_datetime,
+                   e.location_name, e.address, e.price_info, e.url, e.tags, e.category_id
+            FROM events e
+            INNER JOIN event_sources es ON e.id = es.event_id
+            WHERE es.feed_id = ?
+            ORDER BY e.start_datetime DESC
+            LIMIT ?
+        ''', (feed_id, int(limit)))
+        
+        events = []
+        for row in cursor.fetchall():
+            event = {
+                'id': row[0],
+                'title': row[1],
+                'description': row[2],
+                'start_datetime': row[3],
+                'end_datetime': row[4],
+                'location_name': row[5],
+                'address': row[6],
+                'price_info': row[7],
+                'url': row[8],
+                'tags': row[9],
+                'category_id': row[10]
+            }
+            events.append(event)
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'feed_name': feed_name,
+            'events': events,
+            'count': len(events)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/rss-feeds/scheduler-status', methods=['GET'])
+@require_auth
+def get_scheduler_status_api():
+    """Get RSS scheduler status"""
+    try:
+        status = get_scheduler_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
+    print('Starting RSS feed scheduler...')
+    start_rss_scheduler()
+    print('RSS scheduler started successfully!')
     init_db()
     app.run(debug=True, port=5001)

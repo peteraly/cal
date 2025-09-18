@@ -74,6 +74,8 @@ def start_app(python_path):
     """Start the Flask application"""
     print_colored("🚀 Starting Flask application...", "green")
     print_colored("📱 App will be available at: http://localhost:5001", "blue")
+    print_colored("🔐 Admin login: http://localhost:5001/admin (admin/admin123)", "blue")
+    print_colored("📊 API: http://localhost:5001/api/events", "blue")
     print_colored("💡 Press Ctrl+C to stop the server", "yellow")
     print("=" * 50)
     

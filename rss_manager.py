@@ -14,6 +14,8 @@ import time
 import logging
 from typing import Dict, List, Optional, Tuple
 import xml.etree.ElementTree as ET
+import schedule
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,8 +57,52 @@ class RSSManager:
         except Exception as e:
             return False, f"Validation error: {str(e)}"
     
+    def test_feed_url(self, url: str) -> Dict:
+        """Test an RSS feed URL and return detailed information"""
+        try:
+            # Validate the URL first
+            is_valid, message = self.validate_rss_url(url)
+            
+            if not is_valid:
+                return {
+                    'success': False,
+                    'message': message,
+                    'events': 0
+                }
+            
+            # Parse the feed to get more details
+            feed = feedparser.parse(url)
+            
+            # Count potential events
+            event_count = 0
+            for entry in feed.entries:
+                # Simple heuristic to determine if it's an event
+                title = entry.get('title', '').lower()
+                description = entry.get('description', '').lower()
+                
+                # Look for event-related keywords
+                event_keywords = ['event', 'concert', 'show', 'performance', 'exhibition', 'workshop', 'meeting', 'conference', 'festival']
+                if any(keyword in title or keyword in description for keyword in event_keywords):
+                    event_count += 1
+            
+            return {
+                'success': True,
+                'message': f"Feed is valid and accessible. Found {len(feed.entries)} total items, {event_count} potential events.",
+                'events': event_count,
+                'total_items': len(feed.entries),
+                'feed_title': feed.feed.get('title', 'Unknown'),
+                'feed_description': feed.feed.get('description', 'No description available')
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f"Error testing feed: {str(e)}",
+                'events': 0
+            }
+    
     def add_feed(self, name: str, url: str, description: str = "", 
-                 category: str = "events", update_interval: int = 30) -> Tuple[bool, str]:
+                 category: str = "events", update_interval: int = 30, enabled: bool = True) -> Tuple[bool, str]:
         """Add a new RSS feed"""
         # Validate the feed first
         is_valid, message = self.validate_rss_url(url)
@@ -74,9 +120,9 @@ class RSSManager:
             
             # Insert new feed
             cursor.execute('''
-                INSERT INTO rss_feeds (name, url, description, category, update_interval)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, url, description, category, update_interval))
+                INSERT INTO rss_feeds (name, url, description, category, update_interval, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (name, url, description, category, update_interval, enabled))
             
             feed_id = cursor.lastrowid
             conn.commit()
@@ -432,6 +478,188 @@ class RSSManager:
                 total_results[key] += value
         
         return total_results
+    
+    def get_all_feeds(self) -> List[Dict]:
+        """Get all RSS feeds"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT f.id, f.name, f.url, f.description, f.category, f.is_active, 
+                   f.last_checked, f.created_at, f.update_interval, f.consecutive_failures,
+                   COUNT(es.event_id) as total_events
+            FROM rss_feeds f
+            LEFT JOIN event_sources es ON f.id = es.feed_id
+            GROUP BY f.id, f.name, f.url, f.description, f.category, f.is_active, 
+                     f.last_checked, f.created_at, f.update_interval, f.consecutive_failures
+            ORDER BY f.created_at DESC
+        ''')
+        
+        feeds = []
+        for row in cursor.fetchall():
+            feed = {
+                'id': row[0],
+                'name': row[1],
+                'url': row[2],
+                'description': row[3],
+                'category': row[4],
+                'enabled': bool(row[5]),
+                'is_active': bool(row[5]),  # Keep both for compatibility
+                'last_checked': row[6],
+                'created_at': row[7],
+                'update_interval': row[8],
+                'consecutive_failures': row[9] or 0,
+                'total_events': row[10] or 0
+            }
+            feeds.append(feed)
+        
+        conn.close()
+        return feeds
+    
+    def update_feed(self, feed_id: int, data: Dict) -> bool:
+        """Update an RSS feed"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                UPDATE rss_feeds 
+                SET name = ?, url = ?, description = ?, category = ?, 
+                    is_active = ?, update_interval = ?
+                WHERE id = ?
+            ''', (
+                data.get('name'),
+                data.get('url'),
+                data.get('description', ''),
+                data.get('category', 'General'),
+                data.get('enabled', True),
+                data.get('update_interval', 60),
+                feed_id
+            ))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating feed {feed_id}: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def delete_feed(self, feed_id: int) -> bool:
+        """Delete an RSS feed"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('DELETE FROM rss_feeds WHERE id = ?', (feed_id,))
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting feed {feed_id}: {e}")
+            return False
+        finally:
+            conn.close()
+    
+    def refresh_feed(self, feed_id: int) -> Dict:
+        """Manually refresh a specific RSS feed"""
+        try:
+            result = self.process_feed(feed_id)
+            return {
+                'success': True,
+                'feed_id': feed_id,
+                'events_added': result.get('events_added', 0),
+                'message': f"Feed refreshed successfully. Added {result.get('events_added', 0)} events."
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'feed_id': feed_id,
+                'error': str(e)
+            }
+    
+    def refresh_all_feeds(self) -> Dict:
+        """Manually refresh all RSS feeds"""
+        try:
+            result = self.process_all_feeds()
+            return {
+                'success': True,
+                'feeds_processed': len([f for f in self.get_all_feeds() if f['is_active']]),
+                'events_added': result.get('added', 0),
+                'events_updated': result.get('updated', 0),
+                'message': f"Refreshed feeds. Added {result.get('added', 0)} new events, updated {result.get('updated', 0)} existing events."
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    def get_logs(self, limit: int = 100) -> List[Dict]:
+        """Get RSS feed logs"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT l.id, l.feed_id, f.name as feed_name, l.status, 
+                   l.events_added, l.message, l.checked_at
+            FROM rss_feed_logs l
+            LEFT JOIN rss_feeds f ON l.feed_id = f.id
+            ORDER BY l.checked_at DESC
+            LIMIT ?
+        ''', (limit,))
+        
+        logs = []
+        for row in cursor.fetchall():
+            log = {
+                'id': row[0],
+                'feed_id': row[1],
+                'feed_name': row[2],
+                'status': row[3],
+                'events_added': row[4],
+                'message': row[5],
+                'checked_at': row[6]
+            }
+            logs.append(log)
+        
+        conn.close()
+        return logs
+    
+    def get_categories(self) -> List[str]:
+        """Get available RSS feed categories"""
+        return [
+            'General',
+            'Events',
+            'News',
+            'Entertainment',
+            'Sports',
+            'Technology',
+            'Business',
+            'Education',
+            'Community',
+            'Arts'
+        ]
+    
+    def override_event_source(self, event_id: int, reason: str) -> bool:
+        """Override event source (mark as manually added)"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                INSERT OR REPLACE INTO manual_overrides (event_id, reason, created_at)
+                VALUES (?, ?, ?)
+            ''', (event_id, reason, datetime.now().isoformat()))
+            
+            conn.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error overriding event source {event_id}: {e}")
+            return False
+        finally:
+            conn.close()
 
 # Example usage
 if __name__ == "__main__":
@@ -451,4 +679,53 @@ if __name__ == "__main__":
     # Process all feeds
     results = rss_manager.process_all_feeds()
     print(f"Processing results: {results}")
+
+# Global scheduler instance
+_scheduler_thread = None
+_scheduler_running = False
+
+def start_rss_scheduler():
+    """Start the RSS feed scheduler in a background thread"""
+    global _scheduler_thread, _scheduler_running
+    
+    if _scheduler_running:
+        logger.info("RSS scheduler is already running")
+        return
+    
+    def run_scheduler():
+        global _scheduler_running
+        _scheduler_running = True
+        logger.info("RSS scheduler started")
+        
+        # Schedule RSS feed updates every hour
+        schedule.every().hour.do(lambda: RSSManager().process_all_feeds())
+        
+        # Run scheduler
+        while _scheduler_running:
+            schedule.run_pending()
+            time.sleep(60)  # Check every minute
+        
+        logger.info("RSS scheduler stopped")
+    
+    _scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    _scheduler_thread.start()
+    logger.info("RSS feed scheduler started successfully!")
+
+def get_scheduler_status():
+    """Get the current status of the RSS scheduler"""
+    global _scheduler_running, _scheduler_thread
+    
+    return {
+        'running': _scheduler_running,
+        'thread_alive': _scheduler_thread.is_alive() if _scheduler_thread else False,
+        'next_run': str(schedule.next_run()) if schedule.jobs else None,
+        'job_count': len(schedule.jobs)
+    }
+
+def stop_rss_scheduler():
+    """Stop the RSS feed scheduler"""
+    global _scheduler_running
+    _scheduler_running = False
+    schedule.clear()
+    logger.info("RSS scheduler stopped")
 

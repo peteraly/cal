@@ -61,6 +61,8 @@ fi
 # Start the application
 echo -e "${GREEN}🚀 Starting Flask application...${NC}"
 echo -e "${BLUE}📱 App will be available at: http://localhost:5001${NC}"
+echo -e "${BLUE}🔐 Admin login: http://localhost:5001/admin (admin/admin123)${NC}"
+echo -e "${BLUE}📊 API: http://localhost:5001/api/events${NC}"
 echo -e "${YELLOW}💡 Press Ctrl+C to stop the server${NC}"
 echo "=================================="
 
