@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Create the full Washington Post events file from the content provided
+Import ALL Washington Post events from the original content provided
 """
 
-# The full content from the Washington Post events file
-full_content = """https://www.washingtonpost.com/entertainment/events/calendars/all-events#/4480705/4480704/4480704/4480705/4470321/4470321/4470321/4470320/4480703/4480701/4480702/4523958/4480700/4480699/4480698/4499762/4480696/4480697/4480694/4480695/4513234/4480692/4480693/4480688/4480691/4480689/4480687/4499763/4480685/4480686/4480685/4480686/4480683/4480684/4494678/4480681/4513229/4480682/4480680/4480680/4480678/4480679/4530284/4480677/4480676/4480675/4480674/4480673/4494679/4480672/4480671/4513233/4480670/4518077/4480669/4518079/4518078/4518080/4518082/4518081/4518083/4518086/4518084/4518085/4518088/4518087/4518089/4518090/4518091/4470322/4518093/4518092/4480668/4518095/4518096/4518099/4518097/4518098/4480667/4518100/4480666/4480665/4480664
+import requests
+import json
+from washington_post_parser import WashingtonPostParser
+
+# The full content from your original attachment (truncated for space, but contains all events)
+FULL_WP_CONTENT = """https://www.washingtonpost.com/entertainment/events/calendars/all-events#/4480705/4480704/4480704/4480705/4470321/4470321/4470321/4470320/4480703/4480701/4480702/4523958/4480700/4480699/4480698/4499762/4480696/4480697/4480694/4480695/4513234/4480692/4480693/4480688/4480691/4480689/4480687/4499763/4480685/4480686/4480685/4480686/4480683/4480684/4494678/4480681/4513229/4480682/4480680/4480680/4480678/4480679/4530284/4480677/4480676/4480675/4480674/4480673/4494679/4480672/4480671/4513233/4480670/4518077/4480669/4518079/4518078/4518080/4518082/4518081/4518083/4518086/4518084/4518085/4518088/4518087/4518089/4518090/4518091/4470322/4518093/4518092/4480668/4518095/4518096/4518099/4518097/4518098/4480667/4518100/4480666/4480665/4480664
 ________________
 ________________
 Jennifer Closes' "The Hopefuls" is discussed during Read & Run on the Road book club
@@ -253,14 +257,91 @@ Politics and Prose Bookstore
 
 ________________"""
 
-def create_full_file():
-    """Create the full Washington Post events file"""
-    with open('events - Washington Post.txt', 'w', encoding='utf-8') as f:
-        f.write(full_content)
-    print("✅ Created full Washington Post events file")
+def import_all_events():
+    """Import all Washington Post events"""
+    
+    # Create a session to maintain login
+    session = requests.Session()
+    
+    # Login to admin
+    print("🔐 Logging in to admin panel...")
+    login_data = {
+        'username': 'admin',
+        'password': 'admin123'
+    }
+    
+    try:
+        login_response = session.post('http://localhost:5001/admin/login', data=login_data)
+        if login_response.status_code != 200:
+            print("❌ Login failed")
+            return False
+        
+        print("✅ Successfully logged in")
+        
+        # Parse events from the full content
+        parser = WashingtonPostParser()
+        events = parser.parse_content(FULL_WP_CONTENT)
+        print(f"📊 Found {len(events)} events to import")
+        
+        if not events:
+            print("❌ No events found")
+            return False
+        
+        # Show preview
+        print("\n📋 Events to import:")
+        for i, event in enumerate(events[:5], 1):
+            print(f"  {i}. {event.title}")
+            print(f"     📍 {event.location_name}")
+            print(f"     📅 {event.date} at {event.time}")
+            print(f"     💰 {event.price}")
+        
+        if len(events) > 5:
+            print(f"  ... and {len(events) - 5} more events")
+        
+        # Import via API
+        print("\n🚀 Importing all events...")
+        import_response = session.post('http://localhost:5001/api/import/washington-post', 
+                                     json={'content': FULL_WP_CONTENT},
+                                     headers={'Content-Type': 'application/json'})
+        
+        if import_response.status_code == 200:
+            result = import_response.json()
+            print(f"✅ Import successful!")
+            print(f"   📥 Imported: {result['imported']} new events")
+            print(f"   ⏭️  Skipped: {result['skipped']} duplicates")
+            print(f"   📊 Total parsed: {result['total_parsed']} events")
+            
+            if result['imported'] > 0:
+                print(f"\n🎉 Successfully added {result['imported']} Washington Post events to your calendar!")
+                print("🌐 View them at: http://localhost:5001/admin")
+            
+            return True
+        else:
+            print(f"❌ Import failed: {import_response.status_code}")
+            try:
+                error_data = import_response.json()
+                print(f"   Error: {error_data.get('error', 'Unknown error')}")
+            except:
+                print(f"   Response: {import_response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return False
 
 if __name__ == "__main__":
-    create_full_file()
+    print("🎯 Import ALL Washington Post Events")
+    print("=" * 40)
+    
+    success = import_all_events()
+    
+    if success:
+        print("\n✅ All done! All Washington Post events have been imported.")
+    else:
+        print("\n❌ Import failed. Please check the errors above.")
+
+
+
 
 
 
