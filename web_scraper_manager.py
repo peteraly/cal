@@ -262,48 +262,82 @@ class WebScraperManager:
             'price': '.price, .cost, .ticket-price'
         }
         
-        config = {**default_config, **selector_config}
+        # Clean and validate selectors
+        config = {}
+        for key, value in {**default_config, **selector_config}.items():
+            if value and isinstance(value, str) and value.strip():
+                # Basic validation - check if it looks like a CSS selector
+                if not value.startswith(('^', '!', '@', '#', '.', '[', ':', '>', '+', '~', ' ', '\t', '\n')):
+                    # If it doesn't start with a valid CSS selector character, skip it
+                    config[key] = default_config.get(key, '')
+                else:
+                    config[key] = value.strip()
+            else:
+                config[key] = default_config.get(key, '')
         
         # Find event containers
-        event_containers = soup.select(config['event_container'])
+        try:
+            event_containers = soup.select(config['event_container'])
+        except Exception as e:
+            logger.warning(f"Invalid CSS selector '{config['event_container']}': {e}")
+            # Fallback to a very generic selector
+            event_containers = soup.find_all(['div', 'article', 'li', 'section'], limit=20)
         
         for container in event_containers:
             try:
                 event = ScrapedEvent(title="")
                 
                 # Extract title
-                title_elem = container.select_one(config['title'])
-                if title_elem:
-                    event.title = title_elem.get_text(strip=True)
+                try:
+                    title_elem = container.select_one(config['title'])
+                    if title_elem:
+                        event.title = title_elem.get_text(strip=True)
+                except Exception as e:
+                    logger.warning(f"Error extracting title: {e}")
                 
                 # Extract description
-                desc_elem = container.select_one(config['description'])
-                if desc_elem:
-                    event.description = desc_elem.get_text(strip=True)
+                try:
+                    desc_elem = container.select_one(config['description'])
+                    if desc_elem:
+                        event.description = desc_elem.get_text(strip=True)
+                except Exception as e:
+                    logger.warning(f"Error extracting description: {e}")
                 
                 # Extract date and time
-                date_elem = container.select_one(config['date'])
-                if date_elem:
-                    date_text = date_elem.get_text(strip=True)
-                    event.start_datetime = self._parse_datetime(date_text)
+                try:
+                    date_elem = container.select_one(config['date'])
+                    if date_elem:
+                        date_text = date_elem.get_text(strip=True)
+                        event.start_datetime = self._parse_datetime(date_text)
+                except Exception as e:
+                    logger.warning(f"Error extracting date: {e}")
                 
-                time_elem = container.select_one(config['time'])
-                if time_elem:
-                    time_text = time_elem.get_text(strip=True)
-                    if event.start_datetime:
-                        event.start_datetime += f" {time_text}"
-                    else:
-                        event.start_datetime = time_text
+                try:
+                    time_elem = container.select_one(config['time'])
+                    if time_elem:
+                        time_text = time_elem.get_text(strip=True)
+                        if event.start_datetime:
+                            event.start_datetime += f" {time_text}"
+                        else:
+                            event.start_datetime = time_text
+                except Exception as e:
+                    logger.warning(f"Error extracting time: {e}")
                 
                 # Extract location
-                location_elem = container.select_one(config['location'])
-                if location_elem:
-                    event.location_name = location_elem.get_text(strip=True)
+                try:
+                    location_elem = container.select_one(config['location'])
+                    if location_elem:
+                        event.location_name = location_elem.get_text(strip=True)
+                except Exception as e:
+                    logger.warning(f"Error extracting location: {e}")
                 
                 # Extract price
-                price_elem = container.select_one(config['price'])
-                if price_elem:
-                    event.price_info = price_elem.get_text(strip=True)
+                try:
+                    price_elem = container.select_one(config['price'])
+                    if price_elem:
+                        event.price_info = price_elem.get_text(strip=True)
+                except Exception as e:
+                    logger.warning(f"Error extracting price: {e}")
                 
                 # Extract URL (look for links)
                 link_elem = container.select_one('a[href]')
@@ -559,6 +593,24 @@ class WebScraperManager:
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Check if this is a JavaScript-heavy page
+            scripts = soup.find_all('script')
+            has_react = any('react' in str(script).lower() for script in scripts)
+            has_vue = any('vue' in str(script).lower() for script in scripts)
+            has_angular = any('angular' in str(script).lower() for script in scripts)
+            has_spa = any('spa' in str(script).lower() or 'single-page' in str(script).lower() for script in scripts)
+            
+            is_js_heavy = has_react or has_vue or has_angular or has_spa or '#' in url
+            
+            if is_js_heavy:
+                return {
+                    'success': False,
+                    'message': f"This appears to be a JavaScript-heavy website (SPA). Basic web scraping won't work. Consider using RSS feeds instead. Found potential RSS feeds at: {url.rstrip('/')}/feed/ or {url.rstrip('/')}/events/feed/",
+                    'events_found': 0,
+                    'is_javascript_heavy': True,
+                    'rss_suggestion': f"{url.rstrip('/')}/feed/"
+                }
             
             if selector_config:
                 # Test with provided configuration

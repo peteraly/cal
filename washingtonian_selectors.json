@@ -1,0 +1,27 @@
+{
+  "url": "https://www.washingtonian.com/calendar-2/#/",
+  "best_selectors": [
+    {
+      "selector": "[class*=\"event\"]",
+      "count": 20,
+      "sample_text": ""
+    },
+    {
+      "selector": "article",
+      "count": 1,
+      "sample_text": "DC Area Events CalendarThe best things to do in and around Washington, DC. Featured Events is a spon"
+    },
+    {
+      "selector": "div[class*=\"event\"]",
+      "count": 1,
+      "sample_text": ""
+    }
+  ],
+  "recommendations": {
+    "event_container": "[class*=\"event\"]",
+    "title": "h1, h2, h3, a, .title",
+    "date": ".date, .event-date, time",
+    "location": ".location, .venue, .address",
+    "description": ".description, .event-description, p"
+  }
+}
