@@ -1488,6 +1488,13 @@ def add_rss_feed():
     """Add a new RSS feed"""
     try:
         data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('name'):
+            return jsonify({'error': 'Feed name is required'}), 400
+        if not data.get('url'):
+            return jsonify({'error': 'RSS URL is required'}), 400
+            
         success, message = rss_manager.add_feed(
             name=data['name'],
             url=data['url'],
@@ -1500,8 +1507,10 @@ def add_rss_feed():
         if not success:
             return jsonify({'error': message}), 400
         return jsonify({'message': message})
+    except KeyError as e:
+        return jsonify({'error': f'Missing required field: {str(e)}'}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/rss-feeds/<int:feed_id>', methods=['PUT'])
 @require_auth

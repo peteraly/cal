@@ -876,6 +876,13 @@ function rssFeedsManager() {
         },
         
         async addFeed() {
+            // Check if URL already exists
+            const existingFeed = this.feeds.find(feed => feed.url === this.newFeed.url);
+            if (existingFeed) {
+                this.showNotification(`This RSS feed already exists: ${existingFeed.name}`, 'error');
+                return;
+            }
+            
             this.isAdding = true;
             try {
                 const response = await fetch('/api/rss-feeds', {
@@ -897,7 +904,7 @@ function rssFeedsManager() {
                     this.showNotification(data.error || 'Error adding feed', 'error');
                 }
             } catch (error) {
-                this.showNotification('Error adding feed', 'error');
+                this.showNotification('Network error: Unable to add feed', 'error');
             } finally {
                 this.isAdding = false;
             }
