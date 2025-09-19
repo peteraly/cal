@@ -263,7 +263,7 @@
                                                     This website loads content with JavaScript. Instead of web scraping, try adding their RSS feed:
                                                 </div>
                                                 <div class="mt-2 space-y-2">
-                                                    <template x-for="(rssUrl, index) in (testResult.rss_suggestions || [testResult.rss_suggestion])" :key="index">
+                                                    <template x-for="(rssUrl, index) in (testResult && testResult.rss_suggestions ? testResult.rss_suggestions : (testResult && testResult.rss_suggestion ? [testResult.rss_suggestion] : []))" :key="index">
                                                         <div class="flex items-center space-x-2">
                                                             <button type="button" @click="copyRssUrl(rssUrl)" 
                                                                     class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200">
@@ -284,7 +284,7 @@
                                     <!-- Sample events for successful scrapes -->
                                     <div x-show="testResult && testResult.success && testResult.sample_events && testResult.sample_events.length > 0" class="mt-2">
                                         <div class="text-xs font-medium">Sample events found:</div>
-                                        <template x-for="event in (testResult.sample_events || [])" :key="event.title">
+                                        <template x-for="event in (testResult && testResult.sample_events ? testResult.sample_events : [])" :key="event.title">
                                             <div class="text-xs mt-1" x-text="'• ' + event.title"></div>
                                         </template>
                                     </div>

@@ -129,13 +129,21 @@ class WebScraperManager:
             # Test each selector in the configuration
             results = {}
             for key, selector in selector_config.items():
-                if key == 'event_container':
-                    elements = soup.select(selector)
-                    results[key] = len(elements)
-                else:
-                    # Test if selector exists
-                    elements = soup.select(selector)
-                    results[key] = len(elements) > 0
+                if not selector or not isinstance(selector, str) or not selector.strip():
+                    results[key] = 0
+                    continue
+                    
+                try:
+                    if key == 'event_container':
+                        elements = soup.select(selector)
+                        results[key] = len(elements)
+                    else:
+                        # Test if selector exists
+                        elements = soup.select(selector)
+                        results[key] = len(elements) > 0
+                except Exception as selector_error:
+                    logger.warning(f"Invalid selector '{selector}' for key '{key}': {selector_error}")
+                    results[key] = 0
             
             return {
                 'success': True,
@@ -267,8 +275,14 @@ class WebScraperManager:
         for key, value in {**default_config, **selector_config}.items():
             if value and isinstance(value, str) and value.strip():
                 # Basic validation - check if it looks like a CSS selector
-                if not value.startswith(('^', '!', '@', '#', '.', '[', ':', '>', '+', '~', ' ', '\t', '\n')):
-                    # If it doesn't start with a valid CSS selector character, skip it
+                # Allow common CSS selector patterns
+                valid_starters = ('#', '.', '[', ':', '>', '+', '~', ' ', '\t', '\n', 
+                                'div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                                'a', 'li', 'ul', 'ol', 'article', 'section', 'header', 'footer')
+                
+                if not any(value.strip().startswith(starter) for starter in valid_starters):
+                    # If it doesn't look like a valid CSS selector, skip it
+                    logger.warning(f"Invalid CSS selector '{value}' for key '{key}', using default")
                     config[key] = default_config.get(key, '')
                 else:
                     config[key] = value.strip()
