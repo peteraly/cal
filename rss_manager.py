@@ -487,11 +487,19 @@ class RSSManager:
         cursor.execute('''
             SELECT f.id, f.name, f.url, f.description, f.category, f.is_active, 
                    f.last_checked, f.created_at, f.update_interval, f.consecutive_failures,
-                   COUNT(es.event_id) as total_events
+                   COUNT(es.event_id) as total_events,
+                   l.check_time as last_check_time,
+                   l.response_time_ms as last_response_time
             FROM rss_feeds f
             LEFT JOIN event_sources es ON f.id = es.feed_id
+            LEFT JOIN (
+                SELECT feed_id, check_time, response_time_ms,
+                       ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY check_time DESC) as rn
+                FROM rss_feed_logs
+            ) l ON f.id = l.feed_id AND l.rn = 1
             GROUP BY f.id, f.name, f.url, f.description, f.category, f.is_active, 
-                     f.last_checked, f.created_at, f.update_interval, f.consecutive_failures
+                     f.last_checked, f.created_at, f.update_interval, f.consecutive_failures,
+                     l.check_time, l.response_time_ms
             ORDER BY f.created_at DESC
         ''')
         
@@ -509,7 +517,9 @@ class RSSManager:
                 'created_at': row[7],
                 'update_interval': row[8],
                 'consecutive_failures': row[9] or 0,
-                'total_events': row[10] or 0
+                'total_events': row[10] or 0,
+                'last_check_time': row[11],
+                'last_response_time': row[12] or 0
             }
             feeds.append(feed)
         

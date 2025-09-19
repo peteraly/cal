@@ -1691,7 +1691,7 @@ def get_feed_events(feed_id):
         limit = request.args.get('limit', 50)
         cursor.execute('''
             SELECT e.id, e.title, e.description, e.start_datetime, e.end_datetime,
-                   e.location_name, e.address, e.price_info, e.url, e.tags, e.category_id
+                   e.location_name, e.address, e.price_info, e.url, e.tags, e.category_id, e.created_at
             FROM events e
             INNER JOIN event_sources es ON e.id = es.event_id
             WHERE es.feed_id = ?
@@ -1712,7 +1712,8 @@ def get_feed_events(feed_id):
                 'price_info': row[7],
                 'url': row[8],
                 'tags': row[9],
-                'category_id': row[10]
+                'category_id': row[10],
+                'created_at': row[11]
             }
             events.append(event)
         
