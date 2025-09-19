@@ -53,10 +53,11 @@ class RSSManager:
             if not hasattr(feed.feed, 'title') or not feed.feed.title:
                 return False, "RSS feed missing title - may not be a valid RSS feed"
             
-            # Check for entries
+            # Check for entries (allow empty feeds - they might have content later)
             if not feed.entries:
                 feed_title = getattr(feed.feed, 'title', 'Unknown')
-                return False, f"RSS feed contains no entries. Feed title: '{feed_title}'"
+                # Return True for empty feeds with a warning message
+                return True, f"RSS feed is valid but currently empty. Feed title: '{feed_title}'"
             
             # Check if entries have required fields
             if len(feed.entries) > 0:
@@ -96,6 +97,16 @@ class RSSManager:
             total_entries = len(feed.entries)
             feed_title = getattr(feed.feed, 'title', 'Unknown')
             feed_description = getattr(feed.feed, 'description', 'No description')
+            
+            if total_entries == 0:
+                return {
+                    'success': True,
+                    'message': f"RSS feed is valid but currently empty. Feed title: '{feed_title}'. You can add it and it will start working when content is published.",
+                    'events': 0,
+                    'total_items': 0,
+                    'feed_title': feed_title,
+                    'feed_description': feed_description
+                }
             
             for entry in feed.entries:
                 # Simple heuristic to determine if it's an event
