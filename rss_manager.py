@@ -32,8 +32,8 @@ class RSSManager:
     def validate_rss_url(self, url: str) -> Tuple[bool, str]:
         """Validate if URL is a valid RSS feed"""
         try:
-            # Check if URL is accessible
-            response = self.session.head(url, timeout=10)
+            # Check if URL is accessible with longer timeout for slow feeds
+            response = self.session.head(url, timeout=30)
             if response.status_code != 200:
                 return False, f"URL returned status code {response.status_code}"
             
@@ -42,8 +42,10 @@ class RSSManager:
             if 'xml' not in content_type and 'rss' not in content_type:
                 return False, "URL does not appear to be an RSS feed (invalid content type)"
             
-            # Try to parse the feed
-            feed = feedparser.parse(url)
+            # Fetch and parse the feed with timeout
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
             if feed.bozo:
                 return False, f"Invalid RSS format: {feed.bozo_exception}"
             
@@ -70,8 +72,12 @@ class RSSManager:
                     'events': 0
                 }
             
-            # Parse the feed to get more details
-            feed = feedparser.parse(url)
+            # Fetch the feed content with timeout
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            # Parse the feed content
+            feed = feedparser.parse(response.content)
             
             # Count potential events
             event_count = 0
@@ -153,8 +159,10 @@ class RSSManager:
             
             feed_name, feed_url = feed_info
             
-            # Parse the RSS feed
-            feed = feedparser.parse(feed_url)
+            # Fetch and parse the RSS feed with timeout
+            response = self.session.get(feed_url, timeout=30)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
             
             if feed.bozo:
                 self.log_feed_check(feed_id, 'error', 0, 0, 0, f"RSS parsing error: {feed.bozo_exception}")
