@@ -604,12 +604,28 @@ class WebScraperManager:
             is_js_heavy = has_react or has_vue or has_angular or has_spa or '#' in url
             
             if is_js_heavy:
+                # Clean the URL to remove fragments and get base domain
+                base_url = url.split('#')[0].split('?')[0].rstrip('/')
+                if '/calendar-2' in base_url:
+                    # Special case for Washingtonian calendar
+                    rss_suggestions = [
+                        f"{base_url.replace('/calendar-2', '')}/feed/",
+                        f"{base_url.replace('/calendar-2', '')}/events/feed/"
+                    ]
+                else:
+                    rss_suggestions = [
+                        f"{base_url}/feed/",
+                        f"{base_url}/events/feed/",
+                        f"{base_url}/rss/"
+                    ]
+                
                 return {
                     'success': False,
-                    'message': f"This appears to be a JavaScript-heavy website (SPA). Basic web scraping won't work. Consider using RSS feeds instead. Found potential RSS feeds at: {url.rstrip('/')}/feed/ or {url.rstrip('/')}/events/feed/",
+                    'message': f"This appears to be a JavaScript-heavy website (SPA). Basic web scraping won't work. Consider using RSS feeds instead.",
                     'events_found': 0,
                     'is_javascript_heavy': True,
-                    'rss_suggestion': f"{url.rstrip('/')}/feed/"
+                    'rss_suggestions': rss_suggestions,
+                    'rss_suggestion': rss_suggestions[0]  # Primary suggestion
                 }
             
             if selector_config:
