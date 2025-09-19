@@ -312,15 +312,15 @@
                         <div class="mb-3" x-show="feed.recent_events && feed.recent_events.length > 0">
                             <div class="text-xs font-medium text-gray-600 mb-2">Recent Events:</div>
                             <div class="space-y-1 max-h-20 overflow-y-auto">
-                                <template x-for="event in feed.recent_events.slice(0, 3)" :key="event.id">
+                                <template x-for="event in (feed.recent_events || []).slice(0, 3)" :key="event.id">
                                     <div class="flex items-center space-x-2 text-xs">
                                         <div class="w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                                         <span class="text-gray-700 truncate flex-1" x-text="event.title"></span>
                                         <span class="text-gray-500 flex-shrink-0" x-text="formatEventDate(event.start_datetime)"></span>
                                     </div>
                                 </template>
-                                <div x-show="feed.recent_events.length > 3" class="text-xs text-gray-500 text-center pt-1">
-                                    +<span x-text="feed.recent_events.length - 3"></span> more events
+                                <div x-show="feed.recent_events && feed.recent_events.length > 3" class="text-xs text-gray-500 text-center pt-1">
+                                    +<span x-text="(feed.recent_events || []).length - 3"></span> more events
                                 </div>
                             </div>
                         </div>
@@ -426,10 +426,10 @@
                                     </button>
                                 </div>
                                 <div x-show="testResult" class="mt-2 p-3 rounded-md" 
-                                     :class="testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
-                                    <div class="text-sm" x-text="testResult.message"></div>
-                                    <div x-show="testResult.success && testResult.events" class="text-xs mt-1">
-                                        Found <span x-text="testResult.events"></span> events
+                                     :class="testResult && testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
+                                    <div class="text-sm" x-text="testResult ? testResult.message : ''"></div>
+                                    <div x-show="testResult && testResult.success && testResult.events" class="text-xs mt-1">
+                                        Found <span x-text="testResult ? testResult.events : 0"></span> events
                                     </div>
                                 </div>
                             </div>
@@ -522,10 +522,10 @@
                                     </button>
                                 </div>
                                 <div x-show="testResult" class="mt-2 p-3 rounded-md" 
-                                     :class="testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
-                                    <div class="text-sm" x-text="testResult.message"></div>
-                                    <div x-show="testResult.success && testResult.events" class="text-xs mt-1">
-                                        Found <span x-text="testResult.events"></span> events
+                                     :class="testResult && testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
+                                    <div class="text-sm" x-text="testResult ? testResult.message : ''"></div>
+                                    <div x-show="testResult && testResult.success && testResult.events" class="text-xs mt-1">
+                                        Found <span x-text="testResult ? testResult.events : 0"></span> events
                                     </div>
                                 </div>
                             </div>
@@ -814,6 +814,9 @@ function rssFeedsManager() {
         async loadAnalytics() {
             try {
                 const response = await fetch('/api/rss-feeds/analytics');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const data = await response.json();
                 this.analytics = {
                     eventsToday: data.eventsToday || 0,

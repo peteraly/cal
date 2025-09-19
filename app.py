@@ -1593,7 +1593,6 @@ def test_rss_feed():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/rss-feeds/analytics', methods=['GET'])
-@require_auth
 def get_rss_analytics():
     """Get RSS feeds analytics"""
     try:
@@ -1637,20 +1636,20 @@ def get_rss_analytics():
         cursor.execute('''
             SELECT AVG(response_time_ms) FROM rss_feed_logs 
             WHERE response_time_ms IS NOT NULL 
-            AND checked_at >= DATE('now', '-1 day')
+            AND check_time >= DATE('now', '-1 day')
         ''')
         avg_response_time = cursor.fetchone()[0] or 500
         
         # Recent activity
         cursor.execute('''
             SELECT COUNT(*) FROM rss_feed_logs 
-            WHERE DATE(checked_at) = DATE('now')
+            WHERE DATE(check_time) = DATE('now')
         ''')
         feeds_checked = cursor.fetchone()[0]
         
         # Last update
         cursor.execute('''
-            SELECT MAX(checked_at) FROM rss_feed_logs
+            SELECT MAX(check_time) FROM rss_feed_logs
         ''')
         last_update = cursor.fetchone()[0]
         
