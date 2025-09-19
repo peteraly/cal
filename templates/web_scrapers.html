@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Scrapers - Calendar Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50" x-data="webScrapersManager()">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-semibold text-gray-900">🕷️ Web Scrapers</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/admin" class="text-gray-600 hover:text-gray-900">← Back to Admin</a>
+                    <a href="/admin/rss-feeds" class="text-blue-600 hover:text-blue-800">📡 RSS Feeds</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <!-- Analytics Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-spider text-2xl text-blue-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Total Scrapers</dt>
+                                <dd class="text-lg font-medium text-gray-900" x-text="analytics.totalScrapers || 0"></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-play-circle text-2xl text-green-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Active Scrapers</dt>
+                                <dd class="text-lg font-medium text-gray-900" x-text="analytics.activeScrapers || 0"></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-calendar-plus text-2xl text-purple-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Events Scraped</dt>
+                                <dd class="text-lg font-medium text-gray-900" x-text="analytics.totalScrapedEvents || 0"></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-heartbeat text-2xl" :class="analytics.healthScore >= 80 ? 'text-green-600' : analytics.healthScore >= 60 ? 'text-yellow-600' : 'text-red-600'"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Health Score</dt>
+                                <dd class="text-lg font-medium text-gray-900" x-text="(analytics.healthScore || 0) + '%'"></dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center space-x-4">
+                        <button @click="showAddScraperModal = true" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>
+                            Add Web Scraper
+                        </button>
+                        
+                        <button @click="scrapeAll()" 
+                                :disabled="isScrapingAll"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">
+                            <i class="fas fa-sync-alt mr-2" :class="{'animate-spin': isScrapingAll}"></i>
+                            <span x-text="isScrapingAll ? 'Scraping...' : 'Scrape All'"></span>
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4 sm:mt-0">
+                        <div class="flex items-center space-x-2 text-sm text-gray-500">
+                            <i class="fas fa-clock"></i>
+                            <span>Last updated: <span x-text="formatTimeAgo(new Date())"></span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scrapers List -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Web Scrapers</h3>
+                
+                <div x-show="scrapers.length === 0" class="text-center py-12">
+                    <i class="fas fa-spider text-4xl text-gray-400 mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No web scrapers configured</h3>
+                    <p class="text-gray-500 mb-4">Get started by adding your first web scraper to automatically extract events from websites.</p>
+                    <button @click="showAddScraperModal = true" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                        <i class="fas fa-plus mr-2"></i>
+                        Add Web Scraper
+                    </button>
+                </div>
+
+                <div x-show="scrapers.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <template x-for="scraper in scrapers" :key="scraper.id">
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex-1">
+                                    <h4 class="text-lg font-medium text-gray-900" x-text="scraper.name"></h4>
+                                    <p class="text-sm text-gray-600 mt-1" x-text="scraper.description || 'No description'"></p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="px-2 py-1 text-xs rounded-full" 
+                                          :class="scraper.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                                          x-text="scraper.is_active ? 'Active' : 'Inactive'"></span>
+                                    <div class="relative">
+                                        <button @click="showScraperMenu(scraper.id)" 
+                                                class="text-gray-400 hover:text-gray-600">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <div x-show="activeMenu === scraper.id" 
+                                             @click.away="activeMenu = null"
+                                             class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+                                            <div class="py-1">
+                                                <button @click="editScraper(scraper)" 
+                                                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                    <i class="fas fa-edit mr-2"></i>Edit
+                                                </button>
+                                                <button @click="scrapeWebsite(scraper.id)" 
+                                                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                                    <i class="fas fa-sync-alt mr-2"></i>Scrape Now
+                                                </button>
+                                                <button @click="deleteScraper(scraper.id)" 
+                                                        class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                                                    <i class="fas fa-trash mr-2"></i>Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-2 text-sm text-gray-600">
+                                <div class="flex items-center">
+                                    <i class="fas fa-globe w-4 mr-2"></i>
+                                    <span class="truncate" x-text="scraper.url"></span>
+                                </div>
+                                <div class="flex items-center">
+                                    <i class="fas fa-tag w-4 mr-2"></i>
+                                    <span x-text="scraper.category"></span>
+                                </div>
+                                <div class="flex items-center">
+                                    <i class="fas fa-clock w-4 mr-2"></i>
+                                    <span x-text="'Every ' + scraper.update_interval + ' minutes'"></span>
+                                </div>
+                                <div class="flex items-center">
+                                    <i class="fas fa-calendar-plus w-4 mr-2"></i>
+                                    <span x-text="scraper.total_events + ' events scraped'"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 pt-4 border-t border-gray-200">
+                                <div class="flex items-center justify-between text-xs text-gray-500">
+                                    <span>Last run: <span x-text="formatTimeAgo(scraper.last_run)"></span></span>
+                                    <span x-show="scraper.consecutive_failures > 0" 
+                                          class="text-red-600 font-medium">
+                                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                                        <span x-text="scraper.consecutive_failures + ' failures'"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Scraper Modal -->
+    <div x-show="showAddScraperModal" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto" 
+         style="display: none;">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showAddScraperModal = false"></div>
+            
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                <form @submit.prevent="addScraper()">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Add Web Scraper</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Scraper Name</label>
+                                <input type="text" x-model="newScraper.name" required
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Website URL</label>
+                                <div class="mt-1 flex rounded-md shadow-sm">
+                                    <input type="url" x-model="newScraper.url" required
+                                           class="flex-1 border-gray-300 rounded-l-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <button type="button" @click="testScraperUrl()"
+                                            :disabled="!newScraper.url || isTestingUrl"
+                                            class="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 rounded-r-md bg-gray-50 text-gray-500 text-sm hover:bg-gray-100 disabled:opacity-50">
+                                        <i class="fas fa-vial mr-1" :class="{'animate-spin': isTestingUrl}"></i>
+                                        <span x-text="isTestingUrl ? 'Testing...' : 'Test'"></span>
+                                    </button>
+                                </div>
+                                <div x-show="testResult" class="mt-2 p-3 rounded-md" 
+                                     :class="testResult && testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
+                                    <div class="text-sm" x-text="testResult && testResult.message"></div>
+                                    <div x-show="testResult && testResult.success && testResult.sample_events" class="mt-2">
+                                        <div class="text-xs font-medium">Sample events found:</div>
+                                        <template x-for="event in (testResult.sample_events || [])" :key="event.title">
+                                            <div class="text-xs mt-1" x-text="'• ' + event.title"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Description</label>
+                                <textarea x-model="newScraper.description" rows="2"
+                                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Category</label>
+                                    <select x-model="newScraper.category" 
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="events">Events</option>
+                                        <option value="sports">Sports</option>
+                                        <option value="concerts">Concerts</option>
+                                        <option value="food">Food & Dining</option>
+                                        <option value="arts">Arts & Culture</option>
+                                        <option value="business">Business</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Update Interval (minutes)</label>
+                                    <select x-model="newScraper.update_interval" 
+                                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="15">15 minutes</option>
+                                        <option value="30">30 minutes</option>
+                                        <option value="60">1 hour</option>
+                                        <option value="120">2 hours</option>
+                                        <option value="240">4 hours</option>
+                                        <option value="480">8 hours</option>
+                                        <option value="1440">24 hours</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">CSS Selectors (Advanced)</label>
+                                <div class="mt-1 space-y-2">
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="text" x-model="newScraper.selector_config.event_container" 
+                                               placeholder="Event container selector"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                        <input type="text" x-model="newScraper.selector_config.title" 
+                                               placeholder="Title selector"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="text" x-model="newScraper.selector_config.description" 
+                                               placeholder="Description selector"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                        <input type="text" x-model="newScraper.selector_config.date" 
+                                               placeholder="Date selector"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <input type="text" x-model="newScraper.selector_config.location" 
+                                               placeholder="Location selector"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                        <input type="text" x-model="newScraper.selector_config.price" 
+                                               placeholder="Price selector"
+                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                                    </div>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Leave empty to use default selectors</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="submit" 
+                                :disabled="isAdding"
+                                class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50">
+                            <i class="fas fa-plus mr-2" :class="{'animate-spin': isAdding}"></i>
+                            <span x-text="isAdding ? 'Adding...' : 'Add Scraper'"></span>
+                        </button>
+                        <button type="button" @click="showAddScraperModal = false"
+                                class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="fixed top-4 right-4 z-50 space-y-2">
+        <template x-for="notification in notifications" :key="notification.id">
+            <div x-show="notification.show" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-x-full"
+                 x-transition:enter-end="opacity-100 transform translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 transform translate-x-0"
+                 x-transition:leave-end="opacity-0 transform translate-x-full"
+                 class="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden"
+                 :class="{
+                     'bg-green-50 border-l-4 border-green-400': notification.type === 'success',
+                     'bg-red-50 border-l-4 border-red-400': notification.type === 'error',
+                     'bg-yellow-50 border-l-4 border-yellow-400': notification.type === 'warning'
+                 }">
+                <div class="p-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <i class="fas" 
+                               :class="{
+                                   'fa-check-circle text-green-400': notification.type === 'success',
+                                   'fa-exclamation-circle text-red-400': notification.type === 'error',
+                                   'fa-exclamation-triangle text-yellow-400': notification.type === 'warning'
+                               }"></i>
+                        </div>
+                        <div class="ml-3 w-0 flex-1 pt-0.5">
+                            <p class="text-sm font-medium text-gray-900" x-text="notification.message"></p>
+                        </div>
+                        <div class="ml-4 flex-shrink-0 flex">
+                            <button @click="removeNotification(notification.id)" 
+                                    class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function webScrapersManager() {
+            return {
+                scrapers: [],
+                analytics: {},
+                showAddScraperModal: false,
+                isAdding: false,
+                isTestingUrl: false,
+                isScrapingAll: false,
+                testResult: null,
+                activeMenu: null,
+                notifications: [],
+                
+                newScraper: {
+                    name: '',
+                    url: '',
+                    description: '',
+                    category: 'events',
+                    update_interval: 60,
+                    enabled: true,
+                    selector_config: {
+                        event_container: '',
+                        title: '',
+                        description: '',
+                        date: '',
+                        location: '',
+                        price: ''
+                    }
+                },
+                
+                async init() {
+                    await this.loadScrapers();
+                    await this.loadAnalytics();
+                },
+                
+                async loadScrapers() {
+                    try {
+                        const response = await fetch('/api/web-scrapers');
+                        this.scrapers = await response.json();
+                    } catch (error) {
+                        this.showNotification('Error loading scrapers', 'error');
+                    }
+                },
+                
+                async loadAnalytics() {
+                    try {
+                        const response = await fetch('/api/web-scrapers/analytics');
+                        this.analytics = await response.json();
+                    } catch (error) {
+                        console.error('Error loading analytics:', error);
+                    }
+                },
+                
+                async addScraper() {
+                    this.isAdding = true;
+                    try {
+                        const response = await fetch('/api/web-scrapers', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(this.newScraper)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.showAddScraperModal = false;
+                            this.newScraper = {
+                                name: '',
+                                url: '',
+                                description: '',
+                                category: 'events',
+                                update_interval: 60,
+                                enabled: true,
+                                selector_config: {
+                                    event_container: '',
+                                    title: '',
+                                    description: '',
+                                    date: '',
+                                    location: '',
+                                    price: ''
+                                }
+                            };
+                            await this.loadScrapers();
+                            await this.loadAnalytics();
+                            this.showNotification('Web scraper added successfully!', 'success');
+                        } else {
+                            this.showNotification(data.error || 'Error adding scraper', 'error');
+                        }
+                    } catch (error) {
+                        this.showNotification('Network error: Unable to add scraper', 'error');
+                    } finally {
+                        this.isAdding = false;
+                    }
+                },
+                
+                async testScraperUrl() {
+                    if (!this.newScraper.url) return;
+                    
+                    this.isTestingUrl = true;
+                    try {
+                        const response = await fetch('/api/web-scrapers/test', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                url: this.newScraper.url,
+                                selector_config: this.newScraper.selector_config
+                            })
+                        });
+                        
+                        this.testResult = await response.json();
+                    } catch (error) {
+                        this.testResult = {
+                            success: false,
+                            message: 'Network error testing scraper'
+                        };
+                    } finally {
+                        this.isTestingUrl = false;
+                    }
+                },
+                
+                async scrapeWebsite(scraperId) {
+                    try {
+                        const response = await fetch(`/api/web-scrapers/${scraperId}/scrape`, {
+                            method: 'POST'
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.showNotification(data.message, 'success');
+                            await this.loadScrapers();
+                            await this.loadAnalytics();
+                        } else {
+                            this.showNotification(data.error || 'Error scraping website', 'error');
+                        }
+                    } catch (error) {
+                        this.showNotification('Network error scraping website', 'error');
+                    }
+                },
+                
+                async scrapeAll() {
+                    this.isScrapingAll = true;
+                    try {
+                        const response = await fetch('/api/web-scrapers/scrape-all', {
+                            method: 'POST'
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.showNotification(data.message, 'success');
+                            await this.loadScrapers();
+                            await this.loadAnalytics();
+                        } else {
+                            this.showNotification(data.error || 'Error scraping all websites', 'error');
+                        }
+                    } catch (error) {
+                        this.showNotification('Network error scraping websites', 'error');
+                    } finally {
+                        this.isScrapingAll = false;
+                    }
+                },
+                
+                async deleteScraper(scraperId) {
+                    if (!confirm('Are you sure you want to delete this scraper?')) return;
+                    
+                    try {
+                        const response = await fetch(`/api/web-scrapers/${scraperId}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.showNotification('Scraper deleted successfully', 'success');
+                            await this.loadScrapers();
+                            await this.loadAnalytics();
+                        } else {
+                            this.showNotification(data.error || 'Error deleting scraper', 'error');
+                        }
+                    } catch (error) {
+                        this.showNotification('Network error deleting scraper', 'error');
+                    }
+                },
+                
+                showScraperMenu(scraperId) {
+                    this.activeMenu = this.activeMenu === scraperId ? null : scraperId;
+                },
+                
+                showNotification(message, type = 'info') {
+                    const id = Date.now();
+                    this.notifications.push({
+                        id,
+                        message,
+                        type,
+                        show: true
+                    });
+                    
+                    setTimeout(() => {
+                        this.removeNotification(id);
+                    }, 5000);
+                },
+                
+                removeNotification(id) {
+                    const notification = this.notifications.find(n => n.id === id);
+                    if (notification) {
+                        notification.show = false;
+                        setTimeout(() => {
+                            this.notifications = this.notifications.filter(n => n.id !== id);
+                        }, 300);
+                    }
+                },
+                
+                formatTimeAgo(dateString) {
+                    if (!dateString) return 'Never';
+                    const date = new Date(dateString);
+                    const now = new Date();
+                    const diffInSeconds = Math.floor((now - date) / 1000);
+                    
+                    if (diffInSeconds < 60) return 'Just now';
+                    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+                    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+                    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

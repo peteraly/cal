@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from ai_parser import EventParser, suggest_recurrence, analyze_event_importance, SearchParser
 from sync_service import SyncService
 from rss_manager import RSSManager, start_rss_scheduler, get_scheduler_status
+from web_scraper_manager import WebScraperManager, start_web_scraper_scheduler, get_scraper_scheduler_status
 import json
 import re
 
@@ -26,8 +27,9 @@ KENNEDY_CENTER_CALENDAR_URL = 'https://www.kennedy-center.org/whats-on/calendar/
 # Initialize sync service
 sync_service = SyncService(DATABASE)
 
-# Initialize RSS manager
+# Initialize RSS manager and Web Scraper manager
 rss_manager = RSSManager(DATABASE)
+web_scraper_manager = WebScraperManager(DATABASE)
 
 def require_auth(f):
     """Decorator to require admin authentication"""
@@ -1748,9 +1750,219 @@ def get_scheduler_status_api():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Web Scraper Routes
+@app.route('/admin/web-scrapers')
+@require_auth
+def web_scrapers_dashboard():
+    """Web scrapers management dashboard"""
+    return render_template('web_scrapers.html')
+
+@app.route('/api/web-scrapers', methods=['GET'])
+@require_auth
+def get_web_scrapers():
+    """Get all web scrapers"""
+    try:
+        scrapers = web_scraper_manager.get_all_scrapers()
+        return jsonify(scrapers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers', methods=['POST'])
+@require_auth
+def add_web_scraper():
+    """Add a new web scraper"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data.get('name'):
+            return jsonify({'error': 'Scraper name is required'}), 400
+        if not data.get('url'):
+            return jsonify({'error': 'URL is required'}), 400
+            
+        success, message = web_scraper_manager.add_scraper(
+            name=data['name'],
+            url=data['url'],
+            description=data.get('description', ''),
+            category=data.get('category', 'events'),
+            selector_config=data.get('selector_config', {}),
+            update_interval=data.get('update_interval', 60),
+            enabled=data.get('enabled', True)
+        )
+        
+        if not success:
+            return jsonify({'error': message}), 400
+        return jsonify({'message': message})
+    except KeyError as e:
+        return jsonify({'error': f'Missing required field: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/api/web-scrapers/<int:scraper_id>', methods=['PUT'])
+@require_auth
+def update_web_scraper(scraper_id):
+    """Update a web scraper"""
+    try:
+        data = request.get_json()
+        success = web_scraper_manager.update_scraper(scraper_id, data)
+        if success:
+            return jsonify({'message': 'Scraper updated successfully'})
+        else:
+            return jsonify({'error': 'Failed to update scraper'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/<int:scraper_id>', methods=['DELETE'])
+@require_auth
+def delete_web_scraper(scraper_id):
+    """Delete a web scraper"""
+    try:
+        success = web_scraper_manager.delete_scraper(scraper_id)
+        if success:
+            return jsonify({'message': 'Scraper deleted successfully'})
+        else:
+            return jsonify({'error': 'Failed to delete scraper'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/<int:scraper_id>/scrape', methods=['POST'])
+@require_auth
+def scrape_website(scraper_id):
+    """Manually trigger a website scrape"""
+    try:
+        result = web_scraper_manager.scrape_website(scraper_id)
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/scrape-all', methods=['POST'])
+@require_auth
+def scrape_all_websites():
+    """Manually trigger all active scrapers"""
+    try:
+        scrapers = web_scraper_manager.get_all_scrapers()
+        active_scrapers = [s for s in scrapers if s['is_active']]
+        
+        results = []
+        for scraper in active_scrapers:
+            result = web_scraper_manager.scrape_website(scraper['id'])
+            results.append({
+                'scraper_id': scraper['id'],
+                'scraper_name': scraper['name'],
+                'result': result
+            })
+        
+        return jsonify({
+            'message': f'Scraping completed for {len(active_scrapers)} scrapers',
+            'results': results
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/logs', methods=['GET'])
+@require_auth
+def get_web_scraper_logs():
+    """Get web scraper logs"""
+    try:
+        scraper_id = request.args.get('scraper_id', type=int)
+        limit = request.args.get('limit', 50, type=int)
+        logs = web_scraper_manager.get_scraper_logs(scraper_id, limit)
+        return jsonify(logs)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/test', methods=['POST'])
+@require_auth
+def test_web_scraper():
+    """Test a web scraper URL and configuration"""
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        selector_config = data.get('selector_config', {})
+        
+        if not url:
+            return jsonify({'error': 'URL is required'}), 400
+        
+        result = web_scraper_manager.test_scraper_url(url, selector_config)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/analytics', methods=['GET'])
+def get_web_scraper_analytics():
+    """Get web scraper analytics"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Total scrapers
+        cursor.execute('SELECT COUNT(*) FROM web_scrapers')
+        total_scrapers = cursor.fetchone()[0]
+        
+        # Active scrapers
+        cursor.execute('SELECT COUNT(*) FROM web_scrapers WHERE is_active = 1')
+        active_scrapers = cursor.fetchone()[0]
+        
+        # Scrapers with errors
+        cursor.execute('SELECT COUNT(*) FROM web_scrapers WHERE consecutive_failures > 0')
+        error_scrapers = cursor.fetchone()[0]
+        
+        # Total events from scrapers
+        cursor.execute('SELECT SUM(total_events) FROM web_scrapers')
+        total_scraped_events = cursor.fetchone()[0] or 0
+        
+        # Recent scraping activity
+        cursor.execute('''
+            SELECT COUNT(*) FROM web_scraper_logs 
+            WHERE DATE(run_time) = DATE('now')
+        ''')
+        scrapes_today = cursor.fetchone()[0]
+        
+        # Average response time
+        cursor.execute('''
+            SELECT AVG(response_time_ms) FROM web_scraper_logs 
+            WHERE response_time_ms IS NOT NULL 
+            AND DATE(run_time) >= DATE('now', '-7 days')
+        ''')
+        avg_response_time = cursor.fetchone()[0] or 0
+        
+        conn.close()
+        
+        analytics = {
+            'totalScrapers': total_scrapers,
+            'activeScrapers': active_scrapers,
+            'errorScrapers': error_scrapers,
+            'totalScrapedEvents': total_scraped_events,
+            'scrapesToday': scrapes_today,
+            'avgResponseTime': round(avg_response_time, 0),
+            'healthScore': max(0, 100 - (error_scrapers / max(active_scrapers, 1) * 100))
+        }
+        
+        return jsonify(analytics)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/web-scrapers/scheduler-status', methods=['GET'])
+@require_auth
+def get_web_scraper_scheduler_status():
+    """Get web scraper scheduler status"""
+    try:
+        status = get_scraper_scheduler_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     print('Starting RSS feed scheduler...')
     start_rss_scheduler()
     print('RSS scheduler started successfully!')
+    
+    print('Starting web scraper scheduler...')
+    start_web_scraper_scheduler()
+    print('Web scraper scheduler started successfully!')
+    
     init_db()
     app.run(debug=True, port=5001)
