@@ -49,10 +49,22 @@ class RSSManager:
             if feed.bozo:
                 return False, f"Invalid RSS format: {feed.bozo_exception}"
             
-            if not feed.entries:
-                return False, "RSS feed contains no entries"
+            # Check if feed has a title (basic RSS structure)
+            if not hasattr(feed.feed, 'title') or not feed.feed.title:
+                return False, "RSS feed missing title - may not be a valid RSS feed"
             
-            return True, "Valid RSS feed"
+            # Check for entries
+            if not feed.entries:
+                feed_title = getattr(feed.feed, 'title', 'Unknown')
+                return False, f"RSS feed contains no entries. Feed title: '{feed_title}'"
+            
+            # Check if entries have required fields
+            if len(feed.entries) > 0:
+                first_entry = feed.entries[0]
+                if not hasattr(first_entry, 'title') or not first_entry.title:
+                    return False, "RSS feed entries missing titles - may not be a valid RSS feed"
+            
+            return True, f"Valid RSS feed with {len(feed.entries)} entries"
             
         except requests.RequestException as e:
             return False, f"Network error: {str(e)}"
@@ -79,25 +91,29 @@ class RSSManager:
             # Parse the feed content
             feed = feedparser.parse(response.content)
             
-            # Count potential events
+            # Count potential events and provide detailed info
             event_count = 0
+            total_entries = len(feed.entries)
+            feed_title = getattr(feed.feed, 'title', 'Unknown')
+            feed_description = getattr(feed.feed, 'description', 'No description')
+            
             for entry in feed.entries:
                 # Simple heuristic to determine if it's an event
                 title = entry.get('title', '').lower()
                 description = entry.get('description', '').lower()
                 
                 # Look for event-related keywords
-                event_keywords = ['event', 'concert', 'show', 'performance', 'exhibition', 'workshop', 'meeting', 'conference', 'festival']
+                event_keywords = ['event', 'concert', 'show', 'performance', 'exhibition', 'workshop', 'meeting', 'conference', 'festival', 'ticket', 'venue', 'date', 'time']
                 if any(keyword in title or keyword in description for keyword in event_keywords):
                     event_count += 1
             
             return {
                 'success': True,
-                'message': f"Feed is valid and accessible. Found {len(feed.entries)} total items, {event_count} potential events.",
+                'message': f"Feed is valid and accessible. Found {total_entries} total items, {event_count} potential events.",
                 'events': event_count,
-                'total_items': len(feed.entries),
-                'feed_title': feed.feed.get('title', 'Unknown'),
-                'feed_description': feed.feed.get('description', 'No description available')
+                'total_items': total_entries,
+                'feed_title': feed_title,
+                'feed_description': feed_description
             }
             
         except Exception as e:
