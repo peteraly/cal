@@ -1830,7 +1830,14 @@ def delete_web_scraper(scraper_id):
 def scrape_website(scraper_id):
     """Manually trigger a website scrape"""
     try:
-        result = web_scraper_manager.scrape_website(scraper_id)
+        data = request.get_json() or {}
+        use_advanced = data.get('use_advanced', True)  # Default to advanced
+        
+        if use_advanced:
+            result = web_scraper_manager.scrape_website_advanced(scraper_id)
+        else:
+            result = web_scraper_manager.scrape_website(scraper_id)
+        
         if result['success']:
             return jsonify(result)
         else:
@@ -1877,16 +1884,21 @@ def get_web_scraper_logs():
 @app.route('/api/web-scrapers/test', methods=['POST'])
 @require_auth
 def test_web_scraper():
-    """Test a web scraper URL and configuration"""
+    """Test a web scraper URL and configuration using advanced techniques"""
     try:
         data = request.get_json()
         url = data.get('url')
         selector_config = data.get('selector_config', {})
+        use_advanced = data.get('use_advanced', True)  # Default to advanced
         
         if not url:
             return jsonify({'error': 'URL is required'}), 400
         
-        result = web_scraper_manager.test_scraper_url(url, selector_config)
+        if use_advanced:
+            result = web_scraper_manager.test_scraper_url_advanced(url, selector_config)
+        else:
+            result = web_scraper_manager.test_scraper_url(url, selector_config)
+        
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

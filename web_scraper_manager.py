@@ -17,6 +17,15 @@ import schedule
 import threading
 from dataclasses import dataclass
 
+# Import advanced scraping components
+try:
+    from advanced_web_scraper import AdvancedWebScraper
+    from network_fixer import NetworkFixer
+    ADVANCED_SCRAPING_AVAILABLE = True
+except ImportError:
+    ADVANCED_SCRAPING_AVAILABLE = False
+    logger.warning("Advanced scraping components not available")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +53,15 @@ class WebScraperManager:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+        
+        # Initialize advanced scraping components
+        if ADVANCED_SCRAPING_AVAILABLE:
+            self.advanced_scraper = AdvancedWebScraper()
+            self.network_fixer = NetworkFixer()
+        else:
+            self.advanced_scraper = None
+            self.network_fixer = None
+            
         self.init_database()
     
     def init_database(self):
@@ -600,6 +618,100 @@ class WebScraperManager:
             logger.error(f"Error deleting web scraper: {e}")
             return False
     
+    def scrape_website_advanced(self, scraper_id: int) -> Dict:
+        """Enhanced scraping using advanced techniques for various website types"""
+        start_time = time.time()
+        
+        try:
+            # Get scraper details
+            scraper = self.get_scraper_by_id(scraper_id)
+            if not scraper:
+                return {'success': False, 'message': 'Scraper not found'}
+            
+            if not scraper['is_active']:
+                return {'success': False, 'message': 'Scraper is inactive'}
+            
+            # Check network connectivity first
+            if self.network_fixer:
+                connectivity = self.network_fixer.test_connectivity(scraper['url'])
+                if not connectivity['dns_resolution']:
+                    return {
+                        'success': False, 
+                        'message': f"Network connectivity issue: {connectivity['error']}",
+                        'suggestions': connectivity['suggestions']
+                    }
+            
+            # Use advanced scraper if available
+            if self.advanced_scraper:
+                events = self.advanced_scraper.extract_events(
+                    scraper['url'], 
+                    json.loads(scraper['selector_config']) if scraper['selector_config'] else {}
+                )
+            else:
+                # Fallback to basic scraping
+                return self.scrape_website(scraper_id)
+            
+            # Process and save events
+            events_added = 0
+            events_updated = 0
+            
+            for event in events:
+                result = self._process_scraped_event(scraper_id, event, scraper['category'])
+                if result['action'] == 'added':
+                    events_added += 1
+                elif result['action'] == 'updated':
+                    events_updated += 1
+            
+            # Update scraper statistics
+            response_time = int((time.time() - start_time) * 1000)
+            self._log_scraper_run(scraper_id, True, len(events), events_added, response_time)
+            self._update_scraper_stats(scraper_id, len(events), events_added, True)
+            
+            return {
+                'success': True,
+                'message': f'Advanced scraping completed. Found {len(events)} events, added {events_added}, updated {events_updated}',
+                'events_found': len(events),
+                'events_added': events_added,
+                'events_updated': events_updated,
+                'response_time': response_time,
+                'method': 'advanced'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in advanced scraping for website {scraper_id}: {e}")
+            
+            # Fallback to basic scraping
+            logger.info(f"Falling back to basic scraping for scraper {scraper_id}")
+            return self.scrape_website(scraper_id)
+
+    def test_scraper_url_advanced(self, url: str, selector_config: Dict = None) -> Dict:
+        """Test a scraper URL using advanced techniques"""
+        try:
+            # Check network connectivity first
+            if self.network_fixer:
+                connectivity = self.network_fixer.test_connectivity(url)
+                if not connectivity['dns_resolution']:
+                    return {
+                        'success': False,
+                        'message': f"Network connectivity issue: {connectivity['error']}",
+                        'suggestions': connectivity['suggestions'],
+                        'connectivity_issue': True
+                    }
+            
+            # Use advanced scraper if available
+            if self.advanced_scraper:
+                result = self.advanced_scraper.test_scraper(url)
+                return result
+            else:
+                # Fallback to basic test
+                return self.test_scraper_url(url, selector_config)
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f"Advanced scraper test failed: {str(e)}"
+            }
+
     def test_scraper_url(self, url: str, selector_config: Dict = None) -> Dict:
         """Test a scraper URL and configuration"""
         try:
