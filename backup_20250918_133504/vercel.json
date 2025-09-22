@@ -11,10 +11,5 @@
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ],
-  "env": {
-    "SECRET_KEY": "@secret_key",
-    "ADMIN_PASSWORD": "@admin_password",
-    "ENABLE_SCHEDULER": "true"
-  }
+  ]
 }

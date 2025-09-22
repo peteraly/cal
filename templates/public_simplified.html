@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar - Public View{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-4" x-data="calendarApp()">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Event Calendar</h1>
+        <p class="text-gray-600">Click on a date to view events</p>
+        <a href="/admin/login" class="inline-block mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            Admin Login
+        </a>
+    </div>
+
+    <!-- Calendar -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <button @click="previousMonth()" class="p-2 hover:bg-gray-100 rounded-full">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+            <h2 class="text-xl font-semibold text-gray-800" x-text="currentMonthYear"></h2>
+            <button @click="nextMonth()" class="p-2 hover:bg-gray-100 rounded-full">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Calendar Grid -->
+        <div class="grid grid-cols-7 gap-1 mb-2">
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Sun</div>
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Mon</div>
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Tue</div>
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Wed</div>
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Thu</div>
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Fri</div>
+            <div class="text-center text-sm font-medium text-gray-500 py-2">Sat</div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1">
+            <template x-for="day in calendarDays" :key="day.date">
+                <button 
+                    @click="selectDate(day.date)"
+                    :class="{
+                        'bg-blue-500 text-white': day.isSelected,
+                        'bg-gray-100 hover:bg-gray-200': !day.isSelected && day.isCurrentMonth,
+                        'text-gray-400': !day.isCurrentMonth
+                    }"
+                    class="w-full h-10 rounded-lg text-sm font-medium transition-colors relative"
+                    :disabled="!day.isCurrentMonth">
+                    <span x-text="day.dayNumber"></span>
+                    <div x-show="day.hasEvents" class="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                </button>
+            </template>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Search Events</h3>
+        <div class="flex gap-2">
+            <input type="text" 
+                   x-model="searchQuery" 
+                   @input="performSearch()"
+                   placeholder="Search events..."
+                   class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button @click="clearSearch()" 
+                    x-show="searchQuery"
+                    class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Events List -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4" x-text="searchQuery ? 'Search Results' : selectedDateText"></h3>
+        
+        <div x-show="loading" class="text-center py-8">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <p class="mt-2 text-gray-600">Loading...</p>
+        </div>
+
+        <div x-show="!loading && events.length === 0" class="text-center py-8 text-gray-500">
+            No events found.
+        </div>
+
+        <div x-show="!loading && events.length > 0" class="space-y-4">
+            <template x-for="event in events" :key="event.id">
+                <div class="border-l-4 pl-4 py-3" :style="'border-left-color: ' + (event.category_color || '#3B82F6')">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <h4 class="font-medium text-gray-800" x-text="event.title"></h4>
+                            <p class="text-sm text-gray-600" x-text="formatEventTime(event.start_datetime)"></p>
+                            <p x-show="event.location_name" class="text-sm text-gray-500" x-text="'📍 ' + event.location_name"></p>
+                            <p x-show="event.price_info" class="text-sm font-medium" 
+                               :class="event.price_info === 'Free' ? 'text-green-600' : 'text-blue-600'"
+                               x-text="'💰 ' + event.price_info"></p>
+                            <p x-show="event.description" class="text-sm text-gray-600 mt-1" x-text="event.description"></p>
+                        </div>
+                        <div x-show="event.url" class="ml-4">
+                            <a :href="event.url" target="_blank" class="text-blue-600 hover:text-blue-800">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function calendarApp() {
+    return {
+        currentDate: new Date(),
+        selectedDate: null,
+        events: [],
+        loading: false,
+        eventsByDate: {},
+        searchQuery: '',
+        searchResults: [],
+        searchTimeout: null,
+
+        get currentMonthYear() {
+            return this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        },
+
+        get selectedDateText() {
+            if (!this.selectedDate) return 'Select a date to view events';
+            return this.selectedDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        },
+
+        get calendarDays() {
+            const year = this.currentDate.getFullYear();
+            const month = this.currentDate.getMonth();
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const startDate = new Date(firstDay);
+            startDate.setDate(startDate.getDate() - firstDay.getDay());
+            
+            const days = [];
+            
+            for (let i = 0; i < 42; i++) {
+                const date = new Date(startDate);
+                date.setDate(startDate.getDate() + i);
+                
+                const dateStr = this.formatDate(date);
+                const hasEvents = this.eventsByDate[dateStr] && this.eventsByDate[dateStr].length > 0;
+                
+                days.push({
+                    date: dateStr,
+                    dayNumber: date.getDate(),
+                    isCurrentMonth: date.getMonth() === month,
+                    isSelected: this.selectedDate && this.formatDate(this.selectedDate) === dateStr,
+                    hasEvents: hasEvents
+                });
+            }
+            
+            return days;
+        },
+
+        init() {
+            this.loadEventsForMonth();
+        },
+
+        async loadEventsForMonth() {
+            const year = this.currentDate.getFullYear();
+            const month = this.currentDate.getMonth() + 1;
+            
+            try {
+                const response = await fetch(`/api/events?month=${month}&year=${year}`);
+                const events = await response.json();
+                
+                this.eventsByDate = {};
+                events.forEach(event => {
+                    const date = new Date(event.start_datetime);
+                    const dateStr = this.formatDate(date);
+                    if (!this.eventsByDate[dateStr]) {
+                        this.eventsByDate[dateStr] = [];
+                    }
+                    this.eventsByDate[dateStr].push(event);
+                });
+            } catch (error) {
+                console.error('Error loading events:', error);
+            }
+        },
+
+        async selectDate(dateStr) {
+            this.selectedDate = new Date(dateStr);
+            this.loading = true;
+            
+            try {
+                const response = await fetch(`/api/events?date=${dateStr}`);
+                this.events = await response.json();
+            } catch (error) {
+                console.error('Error loading events for date:', error);
+                this.events = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async performSearch() {
+            if (this.searchTimeout) {
+                clearTimeout(this.searchTimeout);
+            }
+            
+            this.searchTimeout = setTimeout(async () => {
+                if (!this.searchQuery.trim()) {
+                    this.events = [];
+                    return;
+                }
+                
+                this.loading = true;
+                
+                try {
+                    const response = await fetch(`/api/events/search?q=${encodeURIComponent(this.searchQuery)}`);
+                    this.events = await response.json();
+                } catch (error) {
+                    console.error('Error searching events:', error);
+                    this.events = [];
+                } finally {
+                    this.loading = false;
+                }
+            }, 300);
+        },
+
+        clearSearch() {
+            if (this.searchTimeout) {
+                clearTimeout(this.searchTimeout);
+            }
+            this.searchQuery = '';
+            this.events = [];
+        },
+
+        async previousMonth() {
+            this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+            await this.loadEventsForMonth();
+        },
+
+        async nextMonth() {
+            this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+            await this.loadEventsForMonth();
+        },
+
+        formatDate(date) {
+            return date.toISOString().split('T')[0];
+        },
+
+        formatEventTime(datetime) {
+            const date = new Date(datetime);
+            return date.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

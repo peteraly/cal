@@ -1,0 +1,662 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Event Management{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50" x-data="adminApp()">
+    <div class="max-w-6xl mx-auto p-4">
+        
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+                    <p class="text-gray-600">Manage your events</p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="/" class="text-blue-600 hover:text-blue-800">View Public</a>
+                    <a href="/admin/logout" class="text-red-600 hover:text-red-800">Logout</a>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="flex space-x-4">
+                <button @click="showAddEventModal = true" 
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    + Add Event
+                </button>
+                <button @click="showImportModal = true" 
+                        class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                    📥 Import Events
+                </button>
+                <button @click="showRSSModal = true" 
+                        class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                    📡 RSS Feeds
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="text-2xl font-bold text-blue-600" x-text="stats.total_events || 0"></div>
+                <div class="text-sm text-gray-600">Total Events</div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="text-2xl font-bold text-green-600" x-text="stats.total_categories || 0"></div>
+                <div class="text-sm text-gray-600">Categories</div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="text-2xl font-bold text-purple-600" x-text="stats.total_feeds || 0"></div>
+                <div class="text-sm text-gray-600">RSS Feeds</div>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <div class="text-2xl font-bold text-orange-600" x-text="selectedEvents.length"></div>
+                <div class="text-sm text-gray-600">Selected</div>
+            </div>
+        </div>
+
+        <!-- Events List -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">All Events</h2>
+                <div class="flex space-x-2">
+                    <button @click="selectAll()" class="text-sm text-blue-600 hover:text-blue-800">Select All</button>
+                    <button @click="clearSelection()" class="text-sm text-gray-600 hover:text-gray-800">Clear</button>
+                    <button @click="bulkDelete()" 
+                            x-show="selectedEvents.length > 0"
+                            class="text-sm text-red-600 hover:text-red-800">
+                        Delete Selected (<span x-text="selectedEvents.length"></span>)
+                    </button>
+                </div>
+            </div>
+            
+            <div class="space-y-3">
+                <template x-for="event in events" :key="event.id">
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start space-x-3 flex-1">
+                                <input type="checkbox" 
+                                       :value="event.id"
+                                       x-model="selectedEvents"
+                                       class="mt-1">
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2 mb-1">
+                                        <h3 class="font-medium text-gray-900" x-text="event.title"></h3>
+                                        <span x-show="event.category_name" 
+                                              class="px-2 py-1 text-xs font-medium rounded-full text-white"
+                                              :style="'background-color: ' + (event.category_color || '#3B82F6')"
+                                              x-text="event.category_name"></span>
+                                    </div>
+                                    <p class="text-sm text-gray-600" x-text="formatEventDateTime(event.start_datetime)"></p>
+                                    <p x-show="event.location_name" class="text-sm text-gray-500" x-text="'📍 ' + event.location_name"></p>
+                                    <p x-show="event.price_info" class="text-sm font-medium" 
+                                       :class="event.price_info === 'Free' ? 'text-green-600' : 'text-blue-600'"
+                                       x-text="'💰 ' + event.price_info"></p>
+                                    <p x-show="event.description" class="text-sm text-gray-600 mt-1" x-text="event.description"></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button @click="editEvent(event)" 
+                                        class="p-2 text-gray-400 hover:text-blue-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <button @click="deleteEvent(event.id)" 
+                                        class="p-2 text-gray-400 hover:text-red-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Empty State -->
+            <div x-show="events.length === 0" class="text-center py-12">
+                <div class="text-gray-400 text-4xl mb-4">📅</div>
+                <p class="text-gray-500 mb-4">No events yet</p>
+                <button @click="showAddEventModal = true" 
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                    Add Your First Event
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add/Edit Event Modal -->
+    <div x-show="showAddEventModal || showEditEventModal" 
+         x-cloak
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+         @click.self="closeModal()">
+        <div class="relative top-4 mx-auto p-4 border w-11/12 max-w-lg shadow-lg rounded-md bg-white">
+            <div class="mb-4">
+                <h3 class="text-lg font-medium text-gray-900" x-text="showAddEventModal ? 'Add New Event' : 'Edit Event'"></h3>
+            </div>
+            
+            <form @submit.prevent="saveEvent()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Event Title *</label>
+                        <input type="text" x-model="eventForm.title" required
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                            <input type="date" x-model="eventForm.date" required
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Time *</label>
+                            <input type="time" x-model="eventForm.time" required
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <input type="text" x-model="eventForm.location_name"
+                               placeholder="Event location"
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Price Information</label>
+                        <input type="text" x-model="eventForm.price_info" placeholder="e.g., Free, $25"
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Event URL</label>
+                        <input type="url" x-model="eventForm.url" placeholder="https://example.com/event"
+                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea x-model="eventForm.description" rows="3"
+                                  class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3 mt-6">
+                    <button type="button" @click="closeModal()"
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" :disabled="saving"
+                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                        <span x-show="!saving" x-text="showAddEventModal ? 'Add Event' : 'Update Event'"></span>
+                        <span x-show="saving">Saving...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Import Modal -->
+    <div x-show="showImportModal" 
+         x-cloak
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+         @click.self="closeImportModal()">
+        <div class="relative top-4 mx-auto p-4 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+            <div class="mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Import Events</h3>
+                <p class="text-sm text-gray-600">Paste event information and let AI extract the details</p>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Event Information</label>
+                    <textarea x-model="importText" rows="6"
+                              placeholder="Paste your event information here..."
+                              class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                </div>
+                
+                <div class="flex space-x-2">
+                    <button @click="importEvents()" 
+                            :disabled="!importText.trim() || importing"
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
+                        <span x-show="!importing">Import Events</span>
+                        <span x-show="importing">Importing...</span>
+                    </button>
+                    <button @click="closeImportModal()" 
+                            class="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- RSS Feeds Modal -->
+    <div x-show="showRSSModal" 
+         x-cloak
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+         @click.self="closeRSSModal()">
+        <div class="relative top-4 mx-auto p-4 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+            <div class="mb-4">
+                <h3 class="text-lg font-medium text-gray-900">RSS Feeds</h3>
+                <p class="text-sm text-gray-600">Manage RSS feeds for automatic event import</p>
+            </div>
+            
+            <!-- Add RSS Feed -->
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Add New RSS Feed</h4>
+                <div class="space-y-3">
+                    <input type="text" x-model="newRSSFeed.name" 
+                           placeholder="Feed name"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <input type="url" x-model="newRSSFeed.url" 
+                           placeholder="RSS feed URL"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <button @click="addRSSFeed()" 
+                            :disabled="!newRSSFeed.name.trim() || !newRSSFeed.url.trim()"
+                            class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400">
+                        Add RSS Feed
+                    </button>
+                </div>
+            </div>
+            
+            <!-- RSS Feeds List -->
+            <div class="space-y-2">
+                <template x-for="feed in rssFeeds" :key="feed.id">
+                    <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                        <div class="flex-1">
+                            <div class="font-medium text-gray-900" x-text="feed.name"></div>
+                            <div class="text-sm text-gray-500" x-text="feed.url"></div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button @click="deleteRSSFeed(feed.id)" 
+                                    class="p-2 text-gray-400 hover:text-red-600">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button @click="refreshRSSFeeds()" 
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    Refresh All Feeds
+                </button>
+                <button @click="closeRSSModal()"
+                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notifications -->
+    <div class="fixed top-4 right-4 z-50 space-y-2">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="toast.show" 
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-x-full"
+                 x-transition:enter-end="opacity-100 transform translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 transform translate-x-0"
+                 x-transition:leave-end="opacity-0 transform translate-x-full"
+                 :class="{
+                     'bg-green-50 border-green-200 text-green-800': toast.type === 'success',
+                     'bg-red-50 border-red-200 text-red-800': toast.type === 'error'
+                 }"
+                 class="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden border">
+                <div class="p-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <div x-show="toast.type === 'success'" class="text-green-400">
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div x-show="toast.type === 'error'" class="text-red-400">
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-3 w-0 flex-1 pt-0.5">
+                            <p class="text-sm font-medium" x-text="toast.message"></p>
+                        </div>
+                        <div class="ml-4 flex-shrink-0 flex">
+                            <button @click="removeToast(toast.id)" class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500">
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function adminApp() {
+    return {
+        events: [],
+        stats: {},
+        selectedEvents: [],
+        showAddEventModal: false,
+        showEditEventModal: false,
+        showImportModal: false,
+        showRSSModal: false,
+        editingEventId: null,
+        saving: false,
+        importing: false,
+        toasts: [],
+        rssFeeds: [],
+        importText: '',
+        newRSSFeed: {
+            name: '',
+            url: ''
+        },
+        eventForm: {
+            title: '',
+            date: '',
+            time: '',
+            location_name: '',
+            price_info: '',
+            url: '',
+            description: ''
+        },
+
+        init() {
+            this.loadEvents();
+            this.loadStats();
+            this.loadRSSFeeds();
+        },
+
+        async loadEvents() {
+            try {
+                const response = await fetch('/api/events');
+                this.events = await response.json();
+            } catch (error) {
+                console.error('Error loading events:', error);
+            }
+        },
+
+        async loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                this.stats = await response.json();
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        },
+
+        async loadRSSFeeds() {
+            try {
+                const response = await fetch('/api/rss-feeds');
+                this.rssFeeds = await response.json();
+            } catch (error) {
+                console.error('Error loading RSS feeds:', error);
+            }
+        },
+
+        async saveEvent() {
+            this.saving = true;
+            try {
+                const eventData = {
+                    ...this.eventForm,
+                    start_datetime: `${this.eventForm.date}T${this.eventForm.time}:00`
+                };
+                
+                const url = this.showAddEventModal ? '/api/events' : `/api/events/${this.editingEventId}`;
+                const method = this.showAddEventModal ? 'POST' : 'PUT';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(eventData)
+                });
+                
+                if (response.ok) {
+                    await this.loadEvents();
+                    this.closeModal();
+                    this.showToast('Event saved successfully!', 'success');
+                } else {
+                    this.showToast('Error saving event', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving event:', error);
+                this.showToast('Error saving event', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        async deleteEvent(eventId) {
+            if (!confirm('Are you sure you want to delete this event?')) return;
+            
+            try {
+                const response = await fetch(`/api/events/${eventId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    await this.loadEvents();
+                    this.showToast('Event deleted successfully!', 'success');
+                } else {
+                    this.showToast('Error deleting event', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting event:', error);
+                this.showToast('Error deleting event', 'error');
+            }
+        },
+
+        async bulkDelete() {
+            if (!confirm(`Are you sure you want to delete ${this.selectedEvents.length} events?`)) return;
+            
+            try {
+                const response = await fetch('/api/events/bulk-delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ event_ids: this.selectedEvents })
+                });
+                
+                if (response.ok) {
+                    await this.loadEvents();
+                    this.selectedEvents = [];
+                    this.showToast('Events deleted successfully!', 'success');
+                } else {
+                    this.showToast('Error deleting events', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting events:', error);
+                this.showToast('Error deleting events', 'error');
+            }
+        },
+
+        editEvent(event) {
+            this.editingEventId = event.id;
+            const eventDate = new Date(event.start_datetime);
+            
+            this.eventForm = {
+                title: event.title,
+                date: eventDate.toISOString().split('T')[0],
+                time: eventDate.toTimeString().slice(0, 5),
+                location_name: event.location_name || '',
+                price_info: event.price_info || '',
+                url: event.url || '',
+                description: event.description || ''
+            };
+            this.showEditEventModal = true;
+        },
+
+        async importEvents() {
+            this.importing = true;
+            try {
+                const response = await fetch('/api/ai/extract-events', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: this.importText })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    this.showToast(`Successfully imported ${data.count} events!`, 'success');
+                    await this.loadEvents();
+                    this.closeImportModal();
+                } else {
+                    this.showToast('Error importing events', 'error');
+                }
+            } catch (error) {
+                console.error('Error importing events:', error);
+                this.showToast('Error importing events', 'error');
+            } finally {
+                this.importing = false;
+            }
+        },
+
+        async addRSSFeed() {
+            try {
+                const response = await fetch('/api/rss-feeds', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.newRSSFeed)
+                });
+                
+                if (response.ok) {
+                    this.showToast('RSS feed added successfully!', 'success');
+                    this.newRSSFeed = { name: '', url: '' };
+                    await this.loadRSSFeeds();
+                } else {
+                    this.showToast('Error adding RSS feed', 'error');
+                }
+            } catch (error) {
+                console.error('Error adding RSS feed:', error);
+                this.showToast('Error adding RSS feed', 'error');
+            }
+        },
+
+        async deleteRSSFeed(feedId) {
+            if (!confirm('Are you sure you want to delete this RSS feed?')) return;
+            
+            try {
+                const response = await fetch(`/api/rss-feeds/${feedId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    this.showToast('RSS feed deleted successfully!', 'success');
+                    await this.loadRSSFeeds();
+                } else {
+                    this.showToast('Error deleting RSS feed', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting RSS feed:', error);
+                this.showToast('Error deleting RSS feed', 'error');
+            }
+        },
+
+        async refreshRSSFeeds() {
+            try {
+                const response = await fetch('/api/rss-feeds/refresh', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    this.showToast(`Refreshed ${result.successful_feeds} feeds, added ${result.total_events} events`, 'success');
+                    await this.loadEvents();
+                } else {
+                    this.showToast('Error refreshing RSS feeds', 'error');
+                }
+            } catch (error) {
+                console.error('Error refreshing RSS feeds:', error);
+                this.showToast('Error refreshing RSS feeds', 'error');
+            }
+        },
+
+        selectAll() {
+            this.selectedEvents = this.events.map(event => event.id);
+        },
+
+        clearSelection() {
+            this.selectedEvents = [];
+        },
+
+        closeModal() {
+            this.showAddEventModal = false;
+            this.showEditEventModal = false;
+            this.editingEventId = null;
+            this.eventForm = {
+                title: '',
+                date: '',
+                time: '',
+                location_name: '',
+                price_info: '',
+                url: '',
+                description: ''
+            };
+        },
+
+        closeImportModal() {
+            this.showImportModal = false;
+            this.importText = '';
+        },
+
+        closeRSSModal() {
+            this.showRSSModal = false;
+        },
+
+        formatEventDateTime(datetime) {
+            const date = new Date(datetime);
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        },
+
+        showToast(message, type = 'success') {
+            const toast = {
+                id: Date.now(),
+                message: message,
+                type: type,
+                show: true
+            };
+            this.toasts.push(toast);
+            
+            setTimeout(() => {
+                this.removeToast(toast.id);
+            }, 5000);
+        },
+
+        removeToast(toastId) {
+            const index = this.toasts.findIndex(t => t.id === toastId);
+            if (index > -1) {
+                this.toasts[index].show = false;
+                setTimeout(() => {
+                    this.toasts.splice(index, 1);
+                }, 200);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

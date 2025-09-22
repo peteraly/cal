@@ -6,8 +6,6 @@ Reduced from 2,160 lines to ~400 lines while maintaining core functionality
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from functools import wraps
 import os
-import threading
-import time
 from dotenv import load_dotenv
 from services import EventService
 
@@ -19,32 +17,6 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 
 # Initialize services
 event_service = EventService()
-
-# Background scheduler for RSS feeds and scrapers
-def start_background_scheduler():
-    """Start background scheduler for RSS feeds and scrapers"""
-    def scheduler_loop():
-        while True:
-            try:
-                # Refresh RSS feeds every 30 minutes
-                event_service.refresh_rss_feeds()
-                print("🔄 RSS feeds refreshed")
-                
-                # Run scrapers every 2 hours
-                # Note: In production, you might want to use a proper job queue
-                time.sleep(1800)  # 30 minutes
-            except Exception as e:
-                print(f"❌ Scheduler error: {e}")
-                time.sleep(300)  # Wait 5 minutes on error
-    
-    # Start scheduler in background thread
-    scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
-    scheduler_thread.start()
-    print("🚀 Background scheduler started")
-
-# Start scheduler only in production or when explicitly enabled
-if os.environ.get('ENABLE_SCHEDULER', 'false').lower() == 'true':
-    start_background_scheduler()
 
 def require_auth(f):
     """Decorator to require admin authentication"""
