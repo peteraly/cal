@@ -239,3 +239,4 @@ if is_js_heavy:
 4. **Regular maintenance** - Keep selectors updated
 
 This comprehensive approach ensures maximum success rates across different website types while providing fallback options when primary methods fail.
+

@@ -20,10 +20,13 @@ from dataclasses import dataclass
 # Import advanced scraping components
 try:
     from advanced_web_scraper import AdvancedWebScraper
+    from enhanced_web_scraper import EnhancedWebScraper
     from network_fixer import NetworkFixer
     ADVANCED_SCRAPING_AVAILABLE = True
+    ENHANCED_SCRAPING_AVAILABLE = True
 except ImportError:
     ADVANCED_SCRAPING_AVAILABLE = False
+    ENHANCED_SCRAPING_AVAILABLE = False
     logger.warning("Advanced scraping components not available")
 
 # Configure logging
@@ -61,6 +64,11 @@ class WebScraperManager:
         else:
             self.advanced_scraper = None
             self.network_fixer = None
+            
+        if ENHANCED_SCRAPING_AVAILABLE:
+            self.enhanced_scraper = EnhancedWebScraper()
+        else:
+            self.enhanced_scraper = None
             
         self.init_database()
     
@@ -118,9 +126,13 @@ class WebScraperManager:
             conn.commit()
             conn.close()
             
-            # Perform initial scrape
+            # Perform initial scrape using enhanced scraper
             if enabled:
-                self.scrape_website(scraper_id)
+                result = self.scrape_website_advanced(scraper_id)
+                if result['success']:
+                    logger.info(f"Initial scrape for scraper {scraper_id}: {result['message']}")
+                else:
+                    logger.warning(f"Initial scrape failed for scraper {scraper_id}: {result['message']}")
             
             return True, f"Web scraper added successfully. Initial scrape completed."
             
@@ -411,20 +423,43 @@ class WebScraperManager:
         except:
             return date_text
     
-    def _process_scraped_event(self, scraper_id: int, event: ScrapedEvent, category: str) -> Dict:
+    def _process_scraped_event(self, scraper_id: int, event, category: str) -> Dict:
         """Process a scraped event and add/update it in the database"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Create a unique identifier for the event
-            event_id = f"{scraper_id}_{hash(event.title + event.start_datetime)}"
+            # Handle both ScrapedEvent objects and dictionaries
+            if isinstance(event, dict):
+                title = event.get('title', '')
+                description = event.get('description', '')
+                start_datetime = event.get('date', '') or event.get('start_datetime', '')
+                location_name = event.get('location', '') or event.get('location_name', '')
+                price_info = event.get('price', '') or event.get('price_info', '')
+                url = event.get('url', '')
+            else:
+                title = event.title
+                description = event.description
+                start_datetime = event.start_datetime
+                location_name = event.location_name
+                price_info = getattr(event, 'price', '') or getattr(event, 'price_info', '')
+                url = event.url
             
-            # Check if event already exists
+            # Clean up data quality issues
+            title = self._clean_text(title)
+            description = self._clean_text(description)
+            start_datetime = self._clean_date_text(start_datetime)
+            location_name = self._clean_location_text(location_name)
+            price_info = self._clean_text(price_info)
+            
+            # Create a unique identifier for the event
+            event_id = f"{scraper_id}_{hash(title + start_datetime)}"
+            
+            # Check if event already exists (improved deduplication)
             cursor.execute('''
                 SELECT id FROM events 
-                WHERE title = ? AND start_datetime = ?
-            ''', (event.title, event.start_datetime))
+                WHERE title = ? AND (start_datetime = ? OR (start_datetime = '' AND ? = ''))
+            ''', (title, start_datetime, start_datetime))
             
             existing_event = cursor.fetchone()
             
@@ -436,10 +471,15 @@ class WebScraperManager:
                     SET description = ?, location_name = ?, address = ?, 
                         price_info = ?, url = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                ''', (event.description, event.location_name, event.address, 
-                      event.price_info, event.url, event_db_id))
+                ''', (description, location_name, '', 
+                      price_info, url, event_db_id))
                 
                 # Update web scraper events tracking
+                cursor.execute('''
+                    INSERT OR IGNORE INTO web_scraper_events (scraper_id, event_id, source_url, scraped_at, last_seen, is_active)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+                ''', (scraper_id, event_db_id, url))
+                
                 cursor.execute('''
                     UPDATE web_scraper_events 
                     SET last_seen = CURRENT_TIMESTAMP, is_active = 1
@@ -454,11 +494,11 @@ class WebScraperManager:
                 # Add new event
                 cursor.execute('''
                     INSERT INTO events (title, description, start_datetime, end_datetime,
-                                      location_name, address, price_info, url, tags, category_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (event.title, event.description, event.start_datetime, event.end_datetime,
-                      event.location_name, event.address, event.price_info, event.url, 
-                      event.tags, 1))  # Default category
+                                      location_name, address, price_info, url, tags, category_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (title, description, start_datetime, '',
+                      location_name, '', price_info, url, 
+                      '', 1))  # Default category
                 
                 event_db_id = cursor.lastrowid
                 
@@ -466,7 +506,7 @@ class WebScraperManager:
                 cursor.execute('''
                     INSERT INTO web_scraper_events (scraper_id, event_id, source_url, scraped_at)
                     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (scraper_id, event_db_id, event.url))
+                ''', (scraper_id, event_db_id, url))
                 
                 conn.commit()
                 conn.close()
@@ -516,6 +556,44 @@ class WebScraperManager:
         except Exception as e:
             logger.error(f"Error getting web scrapers: {e}")
             return []
+
+    def get_scraper_by_id(self, scraper_id: int) -> Optional[Dict]:
+        """Get a specific scraper by ID"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT ws.id, ws.name, ws.url, ws.description, ws.category, 
+                       ws.update_interval, ws.is_active, ws.last_run, ws.next_run,
+                       ws.consecutive_failures, ws.total_events, ws.selector_config
+                FROM web_scrapers ws
+                WHERE ws.id = ?
+            ''', (scraper_id,))
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'name': row[1],
+                    'url': row[2],
+                    'description': row[3],
+                    'category': row[4],
+                    'update_interval': row[5],
+                    'is_active': bool(row[6]),
+                    'last_run': row[7],
+                    'next_run': row[8],
+                    'consecutive_failures': row[9],
+                    'total_events': row[10],
+                    'selector_config': row[11]
+                }
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting scraper {scraper_id}: {e}")
+            return None
     
     def get_scraper_logs(self, scraper_id: int = None, limit: int = 50) -> List[Dict]:
         """Get web scraper logs"""
@@ -618,6 +696,184 @@ class WebScraperManager:
             logger.error(f"Error deleting web scraper: {e}")
             return False
     
+    def _log_scraper_run(self, scraper_id: int, success: bool, events_found: int, events_added: int, response_time: int):
+        """Log a scraper run"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO web_scraper_logs (scraper_id, success, events_found, events_added, response_time_ms, run_time)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (scraper_id, success, events_found, events_added, response_time))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error logging scraper run: {e}")
+    
+    def _update_scraper_stats(self, scraper_id: int, events_found: int, events_added: int, success: bool):
+        """Update scraper statistics"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Update total events and last run time
+            cursor.execute('''
+                UPDATE web_scrapers 
+                SET total_events = ?, last_run = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (events_found, scraper_id))
+            
+            # Update consecutive failures
+            if success:
+                cursor.execute('''
+                    UPDATE web_scrapers 
+                    SET consecutive_failures = 0, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (scraper_id,))
+            else:
+                cursor.execute('''
+                    UPDATE web_scrapers 
+                    SET consecutive_failures = consecutive_failures + 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (scraper_id,))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error updating scraper stats: {e}")
+    
+    def _clean_text(self, text: str) -> str:
+        """Clean up general text by removing extra whitespace and unwanted characters."""
+        if text:
+            text = text.strip()
+            # Remove multiple spaces
+            text = ' '.join(text.split())
+        return text
+    
+    def _clean_date_text(self, text: str) -> str:
+        """Clean up date strings by removing icon text and formatting."""
+        if not text:
+            return ""
+        
+        # Remove icon text and clean up
+        text = text.replace('calendar icon', '').replace('map marker icon', '').strip()
+        text = ' '.join(text.split())
+        
+        # Try to parse and validate the date
+        parsed_date = self._parse_and_validate_date(text)
+        return parsed_date if parsed_date else ""
+    
+    def _parse_and_validate_date(self, date_text: str) -> str:
+        """Parse and validate date text, returning standardized format or empty string if invalid"""
+        if not date_text or date_text.lower() in ['invalid date', 'tbd', 'tba', 'coming soon']:
+            return ""
+        
+        try:
+            from dateutil import parser
+            import datetime
+            
+            # Clean the date text
+            cleaned_text = date_text.strip()
+            
+            # Handle common date patterns
+            date_patterns = [
+                # Full date formats
+                r'(\w{3,9}\s+\d{1,2},?\s+\d{4})',  # "Wed Sep 24, 2025" or "September 24, 2025"
+                r'(\d{1,2}/\d{1,2}/\d{4})',         # "09/24/2025"
+                r'(\d{4}-\d{2}-\d{2})',             # "2025-09-24"
+                r'(\d{1,2}-\d{1,2}-\d{4})',         # "09-24-2025"
+                r'(\w{3,9}\s+\d{1,2})',             # "Sep 24" (assume current year)
+                r'(\d{1,2}\s+\w{3,9})',             # "24 Sep" (assume current year)
+            ]
+            
+            # Try to extract a date pattern first
+            import re
+            for pattern in date_patterns:
+                match = re.search(pattern, cleaned_text, re.IGNORECASE)
+                if match:
+                    date_str = match.group(1)
+                    try:
+                        # Parse the date
+                        parsed_date = parser.parse(date_str, fuzzy=True)
+                        
+                        # If no year specified, assume current year
+                        if parsed_date.year == 1900:  # dateutil default for missing year
+                            current_year = datetime.datetime.now().year
+                            parsed_date = parsed_date.replace(year=current_year)
+                        
+                        # Validate the date is reasonable (not too far in past/future)
+                        current_date = datetime.datetime.now()
+                        if parsed_date < current_date - datetime.timedelta(days=365*2):  # More than 2 years ago
+                            continue
+                        if parsed_date > current_date + datetime.timedelta(days=365*3):  # More than 3 years future
+                            continue
+                        
+                        # Return in standardized format
+                        return parsed_date.strftime('%Y-%m-%d %H:%M:%S')
+                        
+                    except (ValueError, TypeError):
+                        continue
+            
+            # If no pattern matched, try direct parsing
+            try:
+                parsed_date = parser.parse(cleaned_text, fuzzy=True)
+                if parsed_date.year == 1900:
+                    current_year = datetime.datetime.now().year
+                    parsed_date = parsed_date.replace(year=current_year)
+                
+                # Validate date is reasonable
+                current_date = datetime.datetime.now()
+                if (parsed_date >= current_date - datetime.timedelta(days=365*2) and 
+                    parsed_date <= current_date + datetime.timedelta(days=365*3)):
+                    return parsed_date.strftime('%Y-%m-%d %H:%M:%S')
+                    
+            except (ValueError, TypeError):
+                pass
+            
+            # If all parsing fails, return empty string
+            return ""
+            
+        except ImportError:
+            # Fallback if dateutil not available
+            logger.warning("dateutil not available, using basic date parsing")
+            return self._basic_date_parse(date_text)
+        except Exception as e:
+            logger.debug(f"Date parsing error for '{date_text}': {e}")
+            return ""
+    
+    def _basic_date_parse(self, date_text: str) -> str:
+        """Basic date parsing fallback when dateutil is not available"""
+        import re
+        import datetime
+        
+        # Simple patterns
+        patterns = [
+            (r'(\d{4}-\d{2}-\d{2})', '%Y-%m-%d'),
+            (r'(\d{1,2}/\d{1,2}/\d{4})', '%m/%d/%Y'),
+            (r'(\d{1,2}-\d{1,2}-\d{4})', '%m-%d-%Y'),
+        ]
+        
+        for pattern, format_str in patterns:
+            match = re.search(pattern, date_text)
+            if match:
+                try:
+                    date_obj = datetime.datetime.strptime(match.group(1), format_str)
+                    return date_obj.strftime('%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    continue
+        
+        return ""
+    
+    def _clean_location_text(self, text: str) -> str:
+        """Clean up location strings by removing icon text and formatting."""
+        if text:
+            text = text.replace('calendar icon', '').replace('map marker icon', '').strip()
+            # Remove multiple spaces
+            text = ' '.join(text.split())
+        return text
+    
     def scrape_website_advanced(self, scraper_id: int) -> Dict:
         """Enhanced scraping using advanced techniques for various website types"""
         start_time = time.time()
@@ -641,12 +897,19 @@ class WebScraperManager:
                         'suggestions': connectivity['suggestions']
                     }
             
-            # Use advanced scraper if available
-            if self.advanced_scraper:
+            # Use enhanced scraper if available (handles scrolling/pagination)
+            if self.enhanced_scraper:
+                events = self.enhanced_scraper.extract_events(
+                    scraper['url'], 
+                    json.loads(scraper['selector_config']) if scraper['selector_config'] else {}
+                )
+                method = 'enhanced'
+            elif self.advanced_scraper:
                 events = self.advanced_scraper.extract_events(
                     scraper['url'], 
                     json.loads(scraper['selector_config']) if scraper['selector_config'] else {}
                 )
+                method = 'advanced'
             else:
                 # Fallback to basic scraping
                 return self.scrape_website(scraper_id)
@@ -669,23 +932,23 @@ class WebScraperManager:
             
             return {
                 'success': True,
-                'message': f'Advanced scraping completed. Found {len(events)} events, added {events_added}, updated {events_updated}',
+                'message': f'Enhanced scraping completed. Found {len(events)} events, added {events_added}, updated {events_updated}',
                 'events_found': len(events),
                 'events_added': events_added,
                 'events_updated': events_updated,
                 'response_time': response_time,
-                'method': 'advanced'
+                'method': method
             }
             
         except Exception as e:
-            logger.error(f"Error in advanced scraping for website {scraper_id}: {e}")
+            logger.error(f"Error in enhanced scraping for website {scraper_id}: {e}")
             
             # Fallback to basic scraping
             logger.info(f"Falling back to basic scraping for scraper {scraper_id}")
             return self.scrape_website(scraper_id)
 
     def test_scraper_url_advanced(self, url: str, selector_config: Dict = None) -> Dict:
-        """Test a scraper URL using advanced techniques"""
+        """Test a scraper URL using enhanced techniques (handles scrolling/pagination)"""
         try:
             # Check network connectivity first
             if self.network_fixer:
@@ -698,9 +961,14 @@ class WebScraperManager:
                         'connectivity_issue': True
                     }
             
-            # Use advanced scraper if available
-            if self.advanced_scraper:
+            # Use enhanced scraper if available (handles scrolling/pagination)
+            if self.enhanced_scraper:
+                result = self.enhanced_scraper.test_scraper(url)
+                result['method'] = 'enhanced'
+                return result
+            elif self.advanced_scraper:
                 result = self.advanced_scraper.test_scraper(url)
+                result['method'] = 'advanced'
                 return result
             else:
                 # Fallback to basic test
@@ -709,7 +977,7 @@ class WebScraperManager:
         except Exception as e:
             return {
                 'success': False,
-                'message': f"Advanced scraper test failed: {str(e)}"
+                'message': f"Enhanced scraper test failed: {str(e)}"
             }
 
     def test_scraper_url(self, url: str, selector_config: Dict = None) -> Dict:
@@ -802,7 +1070,7 @@ def run_scheduled_scrapers():
         
         for (scraper_id,) in due_scrapers:
             logger.info(f"Running scheduled scraper {scraper_id}")
-            result = scraper_manager.scrape_website(scraper_id)
+            result = scraper_manager.scrape_website_advanced(scraper_id)
             logger.info(f"Scraper {scraper_id} result: {result['message']}")
             
     except Exception as e:

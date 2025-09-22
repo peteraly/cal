@@ -536,3 +536,4 @@ if __name__ == "__main__":
         print(f"\nTesting: {url}")
         result = scraper.test_scraper(url)
         print(f"Result: {result}")
+

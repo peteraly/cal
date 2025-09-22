@@ -1830,14 +1830,7 @@ def delete_web_scraper(scraper_id):
 def scrape_website(scraper_id):
     """Manually trigger a website scrape"""
     try:
-        data = request.get_json() or {}
-        use_advanced = data.get('use_advanced', True)  # Default to advanced
-        
-        if use_advanced:
-            result = web_scraper_manager.scrape_website_advanced(scraper_id)
-        else:
-            result = web_scraper_manager.scrape_website(scraper_id)
-        
+        result = web_scraper_manager.scrape_website(scraper_id)
         if result['success']:
             return jsonify(result)
         else:
@@ -1884,21 +1877,16 @@ def get_web_scraper_logs():
 @app.route('/api/web-scrapers/test', methods=['POST'])
 @require_auth
 def test_web_scraper():
-    """Test a web scraper URL and configuration using advanced techniques"""
+    """Test a web scraper URL and configuration"""
     try:
         data = request.get_json()
         url = data.get('url')
         selector_config = data.get('selector_config', {})
-        use_advanced = data.get('use_advanced', True)  # Default to advanced
         
         if not url:
             return jsonify({'error': 'URL is required'}), 400
         
-        if use_advanced:
-            result = web_scraper_manager.test_scraper_url_advanced(url, selector_config)
-        else:
-            result = web_scraper_manager.test_scraper_url(url, selector_config)
-        
+        result = web_scraper_manager.test_scraper_url(url, selector_config)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1957,6 +1945,91 @@ def get_web_scraper_analytics():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/web-scrapers/<int:scraper_id>/events', methods=['GET'])
+@require_auth
+def get_scraper_events(scraper_id):
+    """Get events from a specific web scraper"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Get events from this scraper
+        cursor.execute('''
+            SELECT e.id, e.title, e.description, e.start_datetime, e.end_datetime,
+                   e.location_name, e.address, e.price_info, e.url, e.tags,
+                   e.created_at, wse.scraped_at
+            FROM events e
+            JOIN web_scraper_events wse ON e.id = wse.event_id
+            WHERE wse.scraper_id = ? AND wse.is_active = 1
+            ORDER BY e.created_at DESC
+        ''', (scraper_id,))
+        
+        events = []
+        for row in cursor.fetchall():
+            # Ensure all required fields exist with default values to prevent Alpine.js errors
+            event = {
+                'id': row[0] or f"event_{scraper_id}_{len(events)}",  # Fallback ID
+                'title': row[1] or 'Untitled Event',
+                'description': row[2] or '',
+                'start_datetime': row[3] or '',
+                'end_datetime': row[4] or '',
+                'location_name': row[5] or '',
+                'address': row[6] or '',
+                'price_info': row[7] or '',
+                'url': row[8] or '',
+                'tags': row[9] or '',
+                'created_at': row[10] or '',
+                'scraped_at': row[11] or '',
+                'after': '',  # Add missing field with default value
+                'formatted_date': format_date_for_display(row[3]) if row[3] else 'Date TBD',
+                'formatted_time': format_time_for_display(row[3]) if row[3] else ''
+            }
+            events.append(event)
+        
+        conn.close()
+        
+        # Remove any potential duplicates by ID to prevent Alpine.js duplicate key errors
+        unique_events = []
+        seen_ids = set()
+        for event in events:
+            if event['id'] not in seen_ids:
+                unique_events.append(event)
+                seen_ids.add(event['id'])
+        
+        return jsonify({
+            'events': unique_events,
+            'count': len(unique_events),
+            'scraper_id': scraper_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching scraper events: {e}")
+        return jsonify({'error': str(e), 'events': [], 'count': 0}), 500
+
+def format_date_for_display(datetime_string):
+    """Format datetime for frontend display"""
+    try:
+        if not datetime_string or datetime_string == 'Invalid Date':
+            return 'Date TBD'
+        
+        from datetime import datetime
+        dt = datetime.fromisoformat(datetime_string.replace('Z', '+00:00'))
+        return dt.strftime('%b %d, %Y')
+    except:
+        return 'Date TBD'
+
+def format_time_for_display(datetime_string):
+    """Format time for frontend display"""
+    try:
+        if not datetime_string or datetime_string == 'Invalid Date':
+            return ''
+        
+        from datetime import datetime
+        dt = datetime.fromisoformat(datetime_string.replace('Z', '+00:00'))
+        return dt.strftime('%I:%M %p')
+    except:
+        return ''
+
 @app.route('/api/web-scrapers/scheduler-status', methods=['GET'])
 @require_auth
 def get_web_scraper_scheduler_status():
@@ -1964,6 +2037,113 @@ def get_web_scraper_scheduler_status():
     try:
         status = get_scraper_scheduler_status()
         return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/fix-invalid-dates', methods=['POST'])
+@require_auth
+def fix_invalid_dates():
+    """Fix invalid dates in the events database"""
+    try:
+        from admin_date_fixer import fix_invalid_dates, create_validation_rules
+        
+        # Fix invalid dates
+        result = fix_invalid_dates()
+        
+        # Create validation rules
+        validation_result = create_validation_rules()
+        
+        return jsonify({
+            'status': 'success',
+            'message': f"Fixed {result['fixed']} events, skipped {result['skipped']}",
+            'details': {
+                'fixed': result['fixed'],
+                'skipped': result['skipped'],
+                'total': result['total'],
+                'validation_created': validation_result['status'] == 'success'
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/admin/date-status')
+@require_auth
+def get_date_status():
+    """Get current date status statistics"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        # Get total events
+        cursor.execute('SELECT COUNT(*) FROM events')
+        total_events = cursor.fetchone()[0]
+        
+        # Get invalid dates
+        cursor.execute('''
+            SELECT COUNT(*) FROM events 
+            WHERE start_datetime IS NULL OR start_datetime = '' OR start_datetime = 'Invalid Date'
+        ''')
+        invalid_dates = cursor.fetchone()[0]
+        
+        # Get valid dates
+        cursor.execute('''
+            SELECT COUNT(*) FROM events 
+            WHERE start_datetime IS NOT NULL AND start_datetime != '' 
+            AND start_datetime != 'Invalid Date' AND datetime(start_datetime) IS NOT NULL
+        ''')
+        valid_dates = cursor.fetchone()[0]
+        
+        # Get TBD dates (events with reasonable future dates)
+        cursor.execute('''
+            SELECT COUNT(*) FROM events 
+            WHERE start_datetime LIKE '%TBD%' OR start_datetime LIKE '%TBA%'
+        ''')
+        tbd_dates = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return jsonify({
+            'total_events': total_events,
+            'invalid_dates': invalid_dates,
+            'valid_dates': valid_dates,
+            'tbd_dates': tbd_dates
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/invalid-dates-list')
+@require_auth
+def get_invalid_dates_list():
+    """Get list of events with invalid dates"""
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, title, start_datetime, url
+            FROM events
+            WHERE start_datetime IS NULL OR start_datetime = '' OR start_datetime = 'Invalid Date'
+            ORDER BY id
+        ''')
+        
+        events = []
+        for row in cursor.fetchall():
+            events.append({
+                'id': row[0],
+                'title': row[1],
+                'start_datetime': row[2],
+                'url': row[3]
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'events': events,
+            'count': len(events)
+        })
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

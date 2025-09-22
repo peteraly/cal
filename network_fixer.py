@@ -184,3 +184,4 @@ if __name__ == "__main__":
     print(f"Current DNS working: {dns_result['current_dns_working']}")
     print(f"Fixes applied: {dns_result['fixes_applied']}")
     print(f"Recommendations: {dns_result['recommendations']}")
+

@@ -1,0 +1,108 @@
+<!-- Date Fix Button for Admin Interface -->
+<!-- Add this button to your admin template where you want the date fixing functionality -->
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">🔧 Date Management</h3>
+    
+    <div class="flex items-center justify-between">
+        <div>
+            <p class="text-sm text-gray-600 mb-2">
+                Fix invalid dates in the events database. This will:
+            </p>
+            <ul class="text-xs text-gray-500 list-disc list-inside mb-4">
+                <li>Extract dates from URLs and event titles</li>
+                <li>Validate and format dates properly</li>
+                <li>Create validation rules to prevent future invalid dates</li>
+            </ul>
+        </div>
+        
+        <button 
+            id="fixDatesBtn"
+            onclick="fixInvalidDates()"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+        >
+            <span>🔧 Fix Invalid Dates</span>
+        </button>
+    </div>
+    
+    <div id="dateFixStatus" class="mt-4 hidden">
+        <div class="bg-gray-50 rounded-lg p-4">
+            <div class="flex items-center space-x-2">
+                <div id="dateFixSpinner" class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <span id="dateFixMessage" class="text-sm text-gray-600">Processing...</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="dateFixResult" class="mt-4 hidden">
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div class="flex items-center space-x-2">
+                <span class="text-green-600">✅</span>
+                <span id="dateFixResultMessage" class="text-sm text-green-800"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function fixInvalidDates() {
+    const btn = document.getElementById('fixDatesBtn');
+    const status = document.getElementById('dateFixStatus');
+    const result = document.getElementById('dateFixResult');
+    const message = document.getElementById('dateFixMessage');
+    const resultMessage = document.getElementById('dateFixResultMessage');
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<span>🔧 Fixing...</span>';
+    status.classList.remove('hidden');
+    result.classList.add('hidden');
+    message.textContent = 'Analyzing and fixing invalid dates...';
+    
+    try {
+        const response = await fetch('/api/admin/fix-invalid-dates', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            resultMessage.textContent = data.message;
+            if (data.details.validation_created) {
+                resultMessage.textContent += ' Validation rules created to prevent future issues.';
+            }
+            result.classList.remove('hidden');
+        } else {
+            resultMessage.textContent = `Error: ${data.message}`;
+            result.querySelector('.bg-green-50').classList.remove('bg-green-50', 'border-green-200');
+            result.querySelector('.bg-green-50').classList.add('bg-red-50', 'border-red-200');
+            result.querySelector('.text-green-600').textContent = '❌';
+            result.querySelector('.text-green-800').classList.remove('text-green-800');
+            result.querySelector('.text-green-800').classList.add('text-red-800');
+            result.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        resultMessage.textContent = `Error: ${error.message}`;
+        result.querySelector('.bg-green-50').classList.remove('bg-green-50', 'border-green-200');
+        result.querySelector('.bg-green-50').classList.add('bg-red-50', 'border-red-200');
+        result.querySelector('.text-green-600').textContent = '❌';
+        result.querySelector('.text-green-800').classList.remove('text-green-800');
+        result.querySelector('.text-green-800').classList.add('text-red-800');
+        result.classList.remove('hidden');
+    } finally {
+        // Hide loading state
+        status.classList.add('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔧 Fix Invalid Dates</span>';
+        
+        // Refresh the page after 3 seconds to show updated data
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+    }
+}
+</script>

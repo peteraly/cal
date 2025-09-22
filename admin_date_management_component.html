@@ -1,0 +1,261 @@
+<!-- Enhanced Date Management Component for Admin Interface -->
+<!-- Add this to your admin template where you want date management functionality -->
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-4">🔧 Date Management</h3>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Current Status -->
+        <div>
+            <h4 class="font-medium text-gray-700 mb-3">Current Status</h4>
+            <div id="dateStatus" class="bg-gray-50 rounded-lg p-4">
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-600">Total Events:</span>
+                        <span id="totalEvents" class="text-sm font-medium">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-600">Valid Dates:</span>
+                        <span id="validDates" class="text-sm font-medium text-green-600">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-600">Invalid Dates:</span>
+                        <span id="invalidDates" class="text-sm font-medium text-red-600">Loading...</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-600">TBD Dates:</span>
+                        <span id="tbdDates" class="text-sm font-medium text-blue-600">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Actions -->
+        <div>
+            <h4 class="font-medium text-gray-700 mb-3">Actions</h4>
+            <div class="space-y-3">
+                <button 
+                    id="checkStatusBtn"
+                    onclick="checkDateStatus()"
+                    class="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                    <span>📊</span>
+                    <span>Check Date Status</span>
+                </button>
+                
+                <button 
+                    id="fixDatesBtn"
+                    onclick="fixInvalidDates()"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                    <span>🔧</span>
+                    <span>Fix Invalid Dates</span>
+                </button>
+                
+                <button 
+                    onclick="viewInvalidDates()"
+                    class="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                    <span>👁️</span>
+                    <span>View Invalid Dates</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Progress Indicator -->
+    <div id="dateFixProgress" class="mt-4 hidden">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-center space-x-3">
+                <div id="dateFixSpinner" class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                <div>
+                    <p id="dateFixMessage" class="text-sm text-blue-800 font-medium">Processing...</p>
+                    <p id="dateFixDetails" class="text-xs text-blue-600">Please wait while we fix invalid dates</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results -->
+    <div id="dateFixResult" class="mt-4 hidden">
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div class="flex items-center space-x-2">
+                <span class="text-green-600 text-xl">✅</span>
+                <div>
+                    <p id="dateFixResultMessage" class="text-sm text-green-800 font-medium"></p>
+                    <p id="dateFixResultDetails" class="text-xs text-green-600"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Error Display -->
+    <div id="dateFixError" class="mt-4 hidden">
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div class="flex items-center space-x-2">
+                <span class="text-red-600 text-xl">❌</span>
+                <div>
+                    <p id="dateFixErrorMessage" class="text-sm text-red-800 font-medium"></p>
+                    <p id="dateFixErrorDetails" class="text-xs text-red-600"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Invalid Dates List -->
+    <div id="invalidDatesList" class="mt-4 hidden">
+        <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <h5 class="font-medium text-orange-800 mb-3">Events with Invalid Dates</h5>
+            <div id="invalidDatesContent" class="space-y-2 max-h-64 overflow-y-auto">
+                <!-- Invalid dates will be listed here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Date Management Functions
+async function checkDateStatus() {
+    const btn = document.getElementById('checkStatusBtn');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span>📊</span><span>Checking...</span>';
+    
+    try {
+        const response = await fetch('/api/admin/date-status');
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Update status display
+        document.getElementById('totalEvents').textContent = data.total_events;
+        document.getElementById('validDates').textContent = data.valid_dates;
+        document.getElementById('invalidDates').textContent = data.invalid_dates;
+        document.getElementById('tbdDates').textContent = data.tbd_dates;
+        
+        // Update invalid dates count color
+        const invalidCount = document.getElementById('invalidDates');
+        if (data.invalid_dates > 0) {
+            invalidCount.classList.remove('text-green-600');
+            invalidCount.classList.add('text-red-600');
+        } else {
+            invalidCount.classList.remove('text-red-600');
+            invalidCount.classList.add('text-green-600');
+        }
+        
+    } catch (error) {
+        console.error('Error checking date status:', error);
+        alert('Error checking date status: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+async function fixInvalidDates() {
+    const btn = document.getElementById('fixDatesBtn');
+    const progress = document.getElementById('dateFixProgress');
+    const result = document.getElementById('dateFixResult');
+    const error = document.getElementById('dateFixError');
+    
+    // Hide previous results
+    result.classList.add('hidden');
+    error.classList.add('hidden');
+    
+    // Show progress
+    btn.disabled = true;
+    btn.innerHTML = '<span>🔧</span><span>Fixing...</span>';
+    progress.classList.remove('hidden');
+    
+    document.getElementById('dateFixMessage').textContent = 'Analyzing and fixing invalid dates...';
+    document.getElementById('dateFixDetails').textContent = 'This may take a few moments';
+    
+    try {
+        const response = await fetch('/api/admin/fix-invalid-dates', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // Show success
+            document.getElementById('dateFixResultMessage').textContent = data.message;
+            document.getElementById('dateFixResultDetails').textContent = 
+                `Fixed ${data.details.fixed} events, skipped ${data.details.skipped} events. ` +
+                (data.details.validation_created ? 'Validation rules updated.' : '');
+            
+            result.classList.remove('hidden');
+            
+            // Refresh status
+            setTimeout(() => {
+                checkDateStatus();
+            }, 1000);
+            
+        } else {
+            throw new Error(data.message || 'Unknown error occurred');
+        }
+        
+    } catch (error) {
+        // Show error
+        document.getElementById('dateFixErrorMessage').textContent = 'Error fixing dates';
+        document.getElementById('dateFixErrorDetails').textContent = error.message;
+        error.classList.remove('hidden');
+        
+    } finally {
+        // Hide progress
+        progress.classList.add('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔧</span><span>Fix Invalid Dates</span>';
+    }
+}
+
+async function viewInvalidDates() {
+    const list = document.getElementById('invalidDatesList');
+    const content = document.getElementById('invalidDatesContent');
+    
+    try {
+        const response = await fetch('/api/admin/date-status');
+        const data = await response.json();
+        
+        if (data.invalid_dates === 0) {
+            content.innerHTML = '<p class="text-sm text-green-600">✅ No invalid dates found!</p>';
+        } else {
+            // Fetch actual invalid dates
+            const invalidResponse = await fetch('/api/admin/invalid-dates-list');
+            const invalidData = await invalidResponse.json();
+            
+            if (invalidData.events && invalidData.events.length > 0) {
+                content.innerHTML = invalidData.events.map(event => `
+                    <div class="flex justify-between items-center p-2 bg-white rounded border">
+                        <div>
+                            <p class="text-sm font-medium">${event.title}</p>
+                            <p class="text-xs text-gray-500">${event.url}</p>
+                        </div>
+                        <span class="text-xs text-red-600">Invalid</span>
+                    </div>
+                `).join('');
+            } else {
+                content.innerHTML = '<p class="text-sm text-gray-600">No invalid dates found</p>';
+            }
+        }
+        
+        list.classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('Error viewing invalid dates:', error);
+        content.innerHTML = '<p class="text-sm text-red-600">Error loading invalid dates</p>';
+        list.classList.remove('hidden');
+    }
+}
+
+// Auto-check status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkDateStatus();
+});
+</script>

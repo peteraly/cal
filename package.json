@@ -1,0 +1,26 @@
+{
+  "name": "calendar-app",
+  "version": "1.0.0",
+  "description": "Event calendar application with web scraping and RSS feeds",
+  "scripts": {
+    "build-css": "tailwindcss -i ./static/css/tailwind.css -o ./static/css/compiled.css --watch",
+    "build-css-prod": "tailwindcss -i ./static/css/tailwind.css -o ./static/css/compiled.css --minify",
+    "dev": "concurrently \"npm run build-css\" \"python3 app.py\"",
+    "start": "python3 app.py"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.0",
+    "@tailwindcss/forms": "^0.5.3",
+    "@tailwindcss/typography": "^0.5.9",
+    "concurrently": "^8.2.0"
+  },
+  "keywords": [
+    "calendar",
+    "events",
+    "web-scraping",
+    "rss",
+    "flask"
+  ],
+  "author": "Calendar App",
+  "license": "MIT"
+}
