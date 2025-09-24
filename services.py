@@ -142,10 +142,65 @@ class RSSService:
             print(f"Error parsing RSS feed {feed_url}: {e}")
             return []
     
+    def _detect_event_type(self, event_data: Dict) -> str:
+        """Automatically detect event type based on content"""
+        title = event_data.get('title', '').lower()
+        description = event_data.get('description', '').lower()
+        location = event_data.get('location_name', '').lower()
+        url = event_data.get('url', '').lower()
+        
+        # Combine all text for analysis
+        all_text = f"{title} {description} {location} {url}"
+        
+        # Online indicators
+        online_keywords = [
+            'zoom', 'virtual', 'online', 'webinar', 'livestream', 'remote',
+            'digital', 'via zoom', 'video conference', 'join us online',
+            'live stream', 'watch online', 'virtual event', 'online only'
+        ]
+        
+        # In-person indicators  
+        in_person_keywords = [
+            'museum', 'library', 'theater', 'auditorium', 'hall', 'building',
+            'room', 'floor', 'address', 'parking', 'venue', 'location',
+            'in person', 'attend in person', 'physical location'
+        ]
+        
+        # Hybrid indicators
+        hybrid_keywords = [
+            'hybrid', 'both online and in person', 'virtual and in person',
+            'attend virtually or in person', 'zoom and in person'
+        ]
+        
+        # Check for hybrid first (most specific)
+        if any(keyword in all_text for keyword in hybrid_keywords):
+            return 'hybrid'
+        
+        # Check online indicators
+        online_score = sum(1 for keyword in online_keywords if keyword in all_text)
+        
+        # Check in-person indicators
+        in_person_score = sum(1 for keyword in in_person_keywords if keyword in all_text)
+        
+        # Additional logic
+        has_physical_location = location and location not in ['virtual', 'online', '']
+        has_url_meeting = 'zoom' in url or 'meet' in url or 'webinar' in url
+        
+        if has_url_meeting or online_score >= 2:
+            return 'online'
+        elif has_physical_location or in_person_score >= 2:
+            return 'in-person' 
+        elif online_score > 0:
+            return 'online'
+        elif in_person_score > 0:
+            return 'in-person'
+        else:
+            return 'unknown'
+    
     def refresh_all_feeds(self, rss_model: RSSFeedModel) -> Dict:
         """Refresh all enabled RSS feeds"""
         feeds = rss_model.get_all_feeds()
-        enabled_feeds = [feed for feed in feeds if feed['enabled']]
+        enabled_feeds = [feed for feed in feeds if feed['is_active']]
         
         total_events = 0
         successful_feeds = 0
@@ -159,6 +214,13 @@ class RSSService:
                     # Check if event already exists
                     existing_events = self.event_model.search_events(event_data['title'])
                     if not existing_events:
+                        # Ensure RSS events require approval
+                        event_data['source'] = 'rss'
+                        event_data['approval_status'] = 'pending'
+                        
+                        # Auto-detect event type
+                        event_data['event_type'] = self._detect_event_type(event_data)
+                        
                         self.event_model.create_event(event_data)
                         total_events += 1
                 
@@ -188,14 +250,14 @@ class EventService:
         self.parser = EventParser()
         self.rss_service = RSSService(self.event_model)
     
-    def get_events(self, date: Optional[str] = None, month: Optional[str] = None, year: Optional[str] = None) -> List[Dict]:
+    def get_events(self, date: Optional[str] = None, month: Optional[str] = None, year: Optional[str] = None, approved_only: bool = True) -> List[Dict]:
         """Get events with optional filtering"""
         if date:
-            return self.event_model.get_events_by_date(date)
+            return self.event_model.get_events_by_date(date, approved_only=approved_only)
         elif month and year:
-            return self.event_model.get_events_by_month(month, year)
+            return self.event_model.get_events_by_month(month, year, approved_only=approved_only)
         else:
-            return self.event_model.get_all_events()
+            return self.event_model.get_all_events(approved_only=approved_only)
     
     def search_events(self, query: str) -> List[Dict]:
         """Search events"""
@@ -263,3 +325,32 @@ class EventService:
             'total_feeds': len(feeds),
             'events_by_category': category_counts
         }
+    
+    # Event Approval Methods
+    def get_pending_events(self) -> List[Dict]:
+        """Get all events pending approval"""
+        return self.event_model.get_pending_events()
+    
+    def approve_event(self, event_id: int, admin_user_id: int) -> bool:
+        """Approve a specific event"""
+        return self.event_model.approve_event(event_id, admin_user_id)
+    
+    def reject_event(self, event_id: int, reason: str, admin_user_id: int) -> bool:
+        """Reject a specific event"""
+        return self.event_model.reject_event(event_id, reason, admin_user_id)
+    
+    def bulk_approve_events(self, event_ids: List[int], admin_user_id: int) -> int:
+        """Bulk approve multiple events"""
+        approved_count = 0
+        for event_id in event_ids:
+            if self.event_model.approve_event(event_id, admin_user_id):
+                approved_count += 1
+        return approved_count
+    
+    def bulk_reject_events(self, event_ids: List[int], reason: str, admin_user_id: int) -> int:
+        """Bulk reject multiple events"""
+        rejected_count = 0
+        for event_id in event_ids:
+            if self.event_model.reject_event(event_id, reason, admin_user_id):
+                rejected_count += 1
+        return rejected_count

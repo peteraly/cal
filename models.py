@@ -102,48 +102,63 @@ class EventModel:
     def __init__(self, db: Database):
         self.db = db
     
-    def get_all_events(self) -> List[Dict]:
+    def get_all_events(self, approved_only: bool = True) -> List[Dict]:
         """Get all events with category information"""
         conn = self.db.get_connection()
-        cursor = conn.execute('''
+        
+        # Build approval filter
+        approval_filter = "WHERE e.approval_status = 'approved'" if approved_only else ""
+        
+        cursor = conn.execute(f'''
             SELECT e.*, c.name as category_name, c.color as category_color 
             FROM events e 
             LEFT JOIN categories c ON e.category_id = c.id 
+            {approval_filter}
             ORDER BY e.start_datetime
         ''')
         events = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return events
     
-    def get_events_by_date(self, date: str) -> List[Dict]:
+    def get_events_by_date(self, date: str, approved_only: bool = True) -> List[Dict]:
         """Get events for a specific date"""
         conn = self.db.get_connection()
+        
+        # Build approval filter
+        approval_filter = "AND e.approval_status = 'approved'" if approved_only else ""
+        
         # Try to match the date in various formats
-        cursor = conn.execute('''
+        cursor = conn.execute(f'''
             SELECT e.*, c.name as category_name, c.color as category_color 
             FROM events e 
             LEFT JOIN categories c ON e.category_id = c.id 
-            WHERE DATE(e.start_datetime) = ? 
+            WHERE (DATE(e.start_datetime) = ? 
                OR e.start_datetime LIKE ?
-               OR e.start_datetime LIKE ?
+               OR e.start_datetime LIKE ?)
+            {approval_filter}
             ORDER BY e.start_datetime
         ''', (date, f'%{date}%', f'%{date.replace("-", "/")}%'))
         events = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return events
     
-    def get_events_by_month(self, month: str, year: str) -> List[Dict]:
+    def get_events_by_month(self, month: str, year: str, approved_only: bool = True) -> List[Dict]:
         """Get events for a specific month"""
         conn = self.db.get_connection()
+        
+        # Build approval filter
+        approval_filter = "AND e.approval_status = 'approved'" if approved_only else ""
+        
         # Try to match the month/year in various formats
         month_padded = month.zfill(2)
-        cursor = conn.execute('''
+        cursor = conn.execute(f'''
             SELECT e.*, c.name as category_name, c.color as category_color 
             FROM events e 
             LEFT JOIN categories c ON e.category_id = c.id 
-            WHERE (strftime("%m", e.start_datetime) = ? AND strftime("%Y", e.start_datetime) = ?)
+            WHERE ((strftime("%m", e.start_datetime) = ? AND strftime("%Y", e.start_datetime) = ?)
                OR e.start_datetime LIKE ?
-               OR e.start_datetime LIKE ?
+               OR e.start_datetime LIKE ?)
+            {approval_filter}
             ORDER BY e.start_datetime
         ''', (month_padded, year, f'%{year}-{month_padded}%', f'%{year}/{month_padded}%'))
         events = [dict(row) for row in cursor.fetchall()]
@@ -171,8 +186,8 @@ class EventModel:
             INSERT INTO events (
                 title, start_datetime, end_datetime, description,
                 location, location_name, address, price_info, url,
-                tags, category_id, source, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                tags, category_id, source, approval_status, event_type, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ''', (
             event_data['title'],
             event_data['start_datetime'],
@@ -185,7 +200,9 @@ class EventModel:
             event_data.get('url', ''),
             event_data.get('tags', ''),
             event_data.get('category_id'),
-            event_data.get('source', 'manual')
+            event_data.get('source', 'manual'),
+            event_data.get('approval_status', 'pending'),
+            event_data.get('event_type', 'unknown')
         ))
         event_id = cursor.lastrowid
         conn.commit()
@@ -224,6 +241,52 @@ class EventModel:
         """Delete an event"""
         conn = self.db.get_connection()
         cursor = conn.execute('DELETE FROM events WHERE id = ?', (event_id,))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    # Event Approval Methods
+    def get_pending_events(self) -> List[Dict]:
+        """Get all events pending approval"""
+        conn = self.db.get_connection()
+        cursor = conn.execute('''
+            SELECT e.*, c.name as category_name, c.color as category_color 
+            FROM events e 
+            LEFT JOIN categories c ON e.category_id = c.id 
+            WHERE e.approval_status = 'pending'
+            ORDER BY e.created_at DESC
+        ''')
+        events = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return events
+    
+    def approve_event(self, event_id: int, admin_user_id: int) -> bool:
+        """Approve a specific event"""
+        conn = self.db.get_connection()
+        cursor = conn.execute('''
+            UPDATE events 
+            SET approval_status = 'approved', 
+                approved_by = ?, 
+                approved_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (admin_user_id, event_id))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def reject_event(self, event_id: int, reason: str, admin_user_id: int) -> bool:
+        """Reject a specific event"""
+        conn = self.db.get_connection()
+        cursor = conn.execute('''
+            UPDATE events 
+            SET approval_status = 'rejected', 
+                approved_by = ?, 
+                approved_at = CURRENT_TIMESTAMP,
+                rejection_reason = ?
+            WHERE id = ?
+        ''', (admin_user_id, reason, event_id))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
@@ -283,7 +346,7 @@ class RSSFeedModel:
         """Create a new RSS feed"""
         conn = self.db.get_connection()
         cursor = conn.execute('''
-            INSERT INTO rss_feeds (name, url, description, enabled, created_at)
+            INSERT INTO rss_feeds (name, url, description, is_active, created_at)
             VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
         ''', (name, url, description))
         feed_id = cursor.lastrowid
@@ -303,7 +366,7 @@ class RSSFeedModel:
     def update_feed_status(self, feed_id: int, enabled: bool) -> bool:
         """Update RSS feed enabled status"""
         conn = self.db.get_connection()
-        cursor = conn.execute('UPDATE rss_feeds SET enabled = ? WHERE id = ?', (enabled, feed_id))
+        cursor = conn.execute('UPDATE rss_feeds SET is_active = ? WHERE id = ?', (enabled, feed_id))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()

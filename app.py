@@ -67,6 +67,12 @@ def admin():
     """Admin calendar view"""
     return render_template('admin_simplified.html')
 
+@app.route('/admin/approval')
+@require_auth
+def admin_approval():
+    """Admin event approval dashboard"""
+    return render_template('admin_approval.html')
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login page"""
@@ -110,14 +116,14 @@ def get_events():
 def create_event():
     """Create a new event"""
     try:
-        data = request.get_json()
-        
-        # Handle tags - convert list to JSON string if needed
-        tags = data.get('tags', '')
-        if isinstance(tags, list):
+    data = request.get_json()
+    
+    # Handle tags - convert list to JSON string if needed
+    tags = data.get('tags', '')
+    if isinstance(tags, list):
             import json
-            tags = json.dumps(tags)
-        
+        tags = json.dumps(tags)
+    
         event_data = {
             'title': data['title'],
             'start_datetime': data['start_datetime'],
@@ -134,7 +140,7 @@ def create_event():
         }
         
         event_id = event_service.create_event(event_data)
-        return jsonify({'id': event_id, 'message': 'Event created successfully'}), 201
+    return jsonify({'id': event_id, 'message': 'Event created successfully'}), 201
         
     except Exception as e:
         app.logger.error(f"Error creating event: {str(e)}")
@@ -145,14 +151,14 @@ def create_event():
 def update_event(event_id):
     """Update an existing event"""
     try:
-        data = request.get_json()
-        
-        # Handle tags - convert list to JSON string if needed
-        tags = data.get('tags', '')
-        if isinstance(tags, list):
+    data = request.get_json()
+    
+    # Handle tags - convert list to JSON string if needed
+    tags = data.get('tags', '')
+    if isinstance(tags, list):
             import json
-            tags = json.dumps(tags)
-        
+        tags = json.dumps(tags)
+    
         event_data = {
             'title': data['title'],
             'start_datetime': data['start_datetime'],
@@ -169,7 +175,7 @@ def update_event(event_id):
         
         success = event_service.update_event(event_id, event_data)
         if success:
-            return jsonify({'message': 'Event updated successfully'})
+    return jsonify({'message': 'Event updated successfully'})
         else:
             return jsonify({'error': 'Event not found'}), 404
             
@@ -184,7 +190,7 @@ def delete_event(event_id):
     try:
         success = event_service.delete_event(event_id)
         if success:
-            return jsonify({'message': 'Event deleted successfully'})
+    return jsonify({'message': 'Event deleted successfully'})
         else:
             return jsonify({'error': 'Event not found'}), 404
             
@@ -217,11 +223,11 @@ def bulk_delete_events():
 def search_events():
     """Search events"""
     try:
-        query = request.args.get('q', '')
-        
-        if not query.strip():
-            return jsonify([])
-        
+    query = request.args.get('q', '')
+    
+    if not query.strip():
+        return jsonify([])
+    
         events = event_service.search_events(query)
         return jsonify(events)
         
@@ -244,12 +250,12 @@ def get_categories():
 def parse_event():
     """Parse natural language event description"""
     try:
-        data = request.get_json()
-        text = data.get('text', '')
-        
-        if not text:
-            return jsonify({'error': 'No text provided'}), 400
-        
+    data = request.get_json()
+    text = data.get('text', '')
+    
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+    
         parsed_event = event_service.parse_event_text(text)
         return jsonify(parsed_event)
         
@@ -262,12 +268,12 @@ def parse_event():
 def extract_events():
     """Extract multiple events from bulk text"""
     try:
-        data = request.get_json()
-        text = data.get('text', '')
-        
-        if not text:
-            return jsonify({'error': 'No text provided'}), 400
-        
+    data = request.get_json()
+    text = data.get('text', '')
+    
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+    
         events = event_service.extract_events_from_text(text)
         return jsonify({
             'events': events,
@@ -301,7 +307,7 @@ def add_rss_feed():
             return jsonify({'error': 'Feed name is required'}), 400
         if not data.get('url'):
             return jsonify({'error': 'RSS URL is required'}), 400
-        
+            
         feed_id = event_service.add_rss_feed(
             name=data['name'],
             url=data['url'],
@@ -349,6 +355,90 @@ def get_stats():
         return jsonify(stats)
     except Exception as e:
         app.logger.error(f"Error getting stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# Event Approval System
+@app.route('/api/admin/events/pending')
+@require_auth
+def get_pending_events():
+    """Get all events pending approval"""
+    try:
+        pending_events = event_service.get_pending_events()
+        return jsonify(pending_events)
+    except Exception as e:
+        app.logger.error(f"Error getting pending events: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/events/<int:event_id>/approve', methods=['POST'])
+@require_auth
+def approve_event(event_id):
+    """Approve a specific event"""
+    try:
+        success = event_service.approve_event(event_id, admin_user_id=1)  # TODO: Get actual admin user ID
+        if success:
+            return jsonify({'message': 'Event approved successfully'})
+        else:
+            return jsonify({'error': 'Event not found'}), 404
+    except Exception as e:
+        app.logger.error(f"Error approving event: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/events/<int:event_id>/reject', methods=['POST'])
+@require_auth
+def reject_event(event_id):
+    """Reject a specific event"""
+    try:
+        data = request.get_json()
+        reason = data.get('reason', 'No reason provided')
+        
+        success = event_service.reject_event(event_id, reason, admin_user_id=1)  # TODO: Get actual admin user ID
+        if success:
+            return jsonify({'message': 'Event rejected successfully'})
+        else:
+            return jsonify({'error': 'Event not found'}), 404
+    except Exception as e:
+        app.logger.error(f"Error rejecting event: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/events/bulk-approve', methods=['POST'])
+@require_auth
+def bulk_approve_events():
+    """Bulk approve multiple events"""
+    try:
+        data = request.get_json()
+        event_ids = data.get('event_ids', [])
+        
+        if not event_ids:
+            return jsonify({'error': 'No event IDs provided'}), 400
+        
+        approved_count = event_service.bulk_approve_events(event_ids, admin_user_id=1)
+        return jsonify({
+            'message': f'Successfully approved {approved_count} events',
+            'approved_count': approved_count
+        })
+    except Exception as e:
+        app.logger.error(f"Error bulk approving events: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/events/bulk-reject', methods=['POST'])
+@require_auth
+def bulk_reject_events():
+    """Bulk reject multiple events"""
+    try:
+        data = request.get_json()
+        event_ids = data.get('event_ids', [])
+        reason = data.get('reason', 'Bulk rejection')
+        
+        if not event_ids:
+            return jsonify({'error': 'No event IDs provided'}), 400
+        
+        rejected_count = event_service.bulk_reject_events(event_ids, reason, admin_user_id=1)
+        return jsonify({
+            'message': f'Successfully rejected {rejected_count} events',
+            'rejected_count': rejected_count
+        })
+    except Exception as e:
+        app.logger.error(f"Error bulk rejecting events: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

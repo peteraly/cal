@@ -28,7 +28,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                 </svg>
             </button>
-            <h2 class="text-lg sm:text-xl font-semibold text-gray-800" x-text="currentMonthYear"></h2>
+            <h2 class="text-lg sm:text-xl font-semibold text-gray-800" x-text="getCurrentMonthYear()"></h2>
             <button @click="nextMonth()" class="p-2 sm:p-3 hover:bg-gray-100 rounded-full touch-manipulation">
                 <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -282,6 +282,7 @@
 function calendarApp() {
     return {
         currentDate: new Date(),
+        monthYearDisplay: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         selectedDate: null,
         events: [],
         loading: false,
@@ -303,9 +304,6 @@ function calendarApp() {
             tags: []
         },
 
-        get currentMonthYear() {
-            return this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        },
 
         get selectedDateText() {
             if (!this.selectedDate) return 'Select a date to view events';
@@ -349,9 +347,25 @@ function calendarApp() {
         },
 
         init() {
+            // Initialize month display
+            this.updateMonthDisplay();
             this.loadEventsForMonth();
             this.loadSubscriptions();
             this.loadSubscriptionSuggestions();
+        },
+        
+        getCurrentMonthYear() {
+            // This method is called by Alpine.js and will trigger reactivity
+            const display = this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            console.log('getCurrentMonthYear called, returning:', display);
+            return display;
+        },
+        
+        updateMonthDisplay() {
+            // Keep this for backward compatibility and debugging
+            const newDisplay = this.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            this.monthYearDisplay = newDisplay;
+            console.log('Month display updated to:', newDisplay);
         },
 
         async loadEventsForMonth() {
@@ -427,13 +441,37 @@ function calendarApp() {
         },
 
         async previousMonth() {
-            this.currentDate.setMonth(this.currentDate.getMonth() - 1);
-            await this.loadEventsForMonth();
+            try {
+                // Create new Date object to trigger Alpine.js reactivity
+                this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1);
+                this.updateMonthDisplay();
+                await this.loadEventsForMonth();
+                
+                // Clear selected date if it's not in the new month
+                if (this.selectedDate && this.selectedDate.getMonth() !== this.currentDate.getMonth()) {
+                    this.selectedDate = null;
+                    this.selectedDateEvents = [];
+                }
+            } catch (error) {
+                console.error('Error navigating to previous month:', error);
+            }
         },
 
         async nextMonth() {
-            this.currentDate.setMonth(this.currentDate.getMonth() + 1);
-            await this.loadEventsForMonth();
+            try {
+                // Create new Date object to trigger Alpine.js reactivity
+                this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1);
+                this.updateMonthDisplay();
+                await this.loadEventsForMonth();
+                
+                // Clear selected date if it's not in the new month
+                if (this.selectedDate && this.selectedDate.getMonth() !== this.currentDate.getMonth()) {
+                    this.selectedDate = null;
+                    this.selectedDateEvents = [];
+                }
+            } catch (error) {
+                console.error('Error navigating to next month:', error);
+            }
         },
 
         formatDate(date) {

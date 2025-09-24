@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Scrapers - Calendar Admin</title>
-    <link href="{{ url_for('static', filename='css/compiled.css') }}" rel="stylesheet">
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="bg-gray-50" x-data="webScrapersManager()">
@@ -19,6 +19,7 @@
                 <div class="flex items-center space-x-4">
                     <a href="/admin" class="text-gray-600 hover:text-gray-900">← Back to Admin</a>
                     <a href="/admin/rss-feeds" class="text-blue-600 hover:text-blue-800">📡 RSS Feeds</a>
+                    <a href="/admin/approval" class="text-green-600 hover:text-green-800">📋 Event Approval</a>
                 </div>
             </div>
         </div>
@@ -158,10 +159,6 @@
                                              @click.away="activeMenu = null"
                                              class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
                                             <div class="py-1">
-                                                <button @click="editScraper(scraper)" 
-                                                        class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                                    <i class="fas fa-edit mr-2"></i>Edit
-                                                </button>
                                                 <button @click="scrapeWebsite(scraper.id)" 
                                                         class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                                     <i class="fas fa-sync-alt mr-2"></i>Scrape Now
@@ -187,42 +184,11 @@
                                 </div>
                                 <div class="flex items-center">
                                     <i class="fas fa-clock w-4 mr-2"></i>
-                                    <span x-text="'Every ' + scraper.update_interval + ' minutes'"></span>
+                                    <span x-text="getUpdateIntervalDisplay(scraper.update_interval)"></span>
                                 </div>
                                 <div class="flex items-center">
                                     <i class="fas fa-calendar-plus w-4 mr-2"></i>
                                     <span x-text="scraper.total_events + ' events scraped'"></span>
-                                </div>
-                            </div>
-                            
-                            <!-- Events from this scraper -->
-                            <div class="mt-4 pt-4 border-t border-gray-200">
-                                <div class="flex items-center justify-between mb-3">
-                                    <h5 class="text-sm font-medium text-gray-700">Recent Events</h5>
-                                    <button @click="viewScraperEvents(scraper.id)" 
-                                            class="text-xs text-blue-600 hover:text-blue-800">
-                                        View All
-                                    </button>
-                                </div>
-                                
-                                <!-- Events list -->
-                                <div class="space-y-2" x-show="scraper.events && scraper.events.length > 0">
-                                    <template x-for="event in (scraper.events || []).slice(0, 3)" :key="event.id">
-                                        <div class="bg-gray-50 rounded-md p-3 text-xs">
-                                            <div class="font-medium text-gray-900" x-text="event.title"></div>
-                                            <div class="text-gray-600 mt-1" x-text="event.start_datetime"></div>
-                                            <div class="text-gray-500 mt-1" x-text="event.location_name"></div>
-                                            <div class="text-gray-400 mt-1">
-                                                Added: <span x-text="formatTimeAgo(event.scraped_at)"></span>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </div>
-                                
-                                <!-- No events message -->
-                                <div x-show="!scraper.events || scraper.events.length === 0" 
-                                     class="text-xs text-gray-500 italic">
-                                    No events found yet
                                 </div>
                             </div>
                             
@@ -284,34 +250,6 @@
                                      :class="testResult && testResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'">
                                     <div class="text-sm" x-text="testResult && testResult.message"></div>
                                     
-                                    <!-- RSS Suggestion for JavaScript-heavy sites -->
-                                    <div x-show="testResult && testResult.is_javascript_heavy" class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                                        <div class="flex items-start">
-                                            <i class="fas fa-info-circle text-blue-500 mt-0.5 mr-2"></i>
-                                            <div class="flex-1">
-                                                <div class="text-sm font-medium text-blue-800">💡 Better Alternative: Use RSS Feed</div>
-                                                <div class="text-xs text-blue-700 mt-1">
-                                                    This website loads content with JavaScript. Instead of web scraping, try adding their RSS feed:
-                                                </div>
-                                                <div class="mt-2 space-y-2">
-                                                    <template x-for="(rssUrl, index) in (testResult && testResult.rss_suggestions ? testResult.rss_suggestions : (testResult && testResult.rss_suggestion ? [testResult.rss_suggestion] : []))" :key="index">
-                                                        <div class="flex items-center space-x-2">
-                                                            <button type="button" @click="copyRssUrl(rssUrl)" 
-                                                                    class="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200">
-                                                                <i class="fas fa-copy mr-1"></i>
-                                                                Copy
-                                                            </button>
-                                                            <span class="text-xs text-blue-600 flex-1" x-text="rssUrl"></span>
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                                <div class="text-xs text-blue-600 mt-2">
-                                                    Go to <strong>RSS Feeds</strong> tab and add one of these URLs instead.
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
                                     <!-- Sample events for successful scrapes -->
                                     <div x-show="testResult && testResult.success && testResult.sample_events && testResult.sample_events.length > 0" class="mt-2">
                                         <div class="text-xs font-medium">Sample events found:</div>
@@ -355,37 +293,6 @@
                                         <option value="1440">24 hours</option>
                                     </select>
                                 </div>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">CSS Selectors (Advanced)</label>
-                                <div class="mt-1 space-y-2">
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <input type="text" x-model="newScraper.selector_config.event_container" 
-                                               placeholder="Event container selector"
-                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        <input type="text" x-model="newScraper.selector_config.title" 
-                                               placeholder="Title selector"
-                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <input type="text" x-model="newScraper.selector_config.description" 
-                                               placeholder="Description selector"
-                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        <input type="text" x-model="newScraper.selector_config.date" 
-                                               placeholder="Date selector"
-                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <input type="text" x-model="newScraper.selector_config.location" 
-                                               placeholder="Location selector"
-                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                        <input type="text" x-model="newScraper.selector_config.price" 
-                                               placeholder="Price selector"
-                                               class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
-                                    </div>
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">Leave empty to use default selectors</p>
                             </div>
                         </div>
                     </div>
@@ -454,15 +361,12 @@
                 scrapers: [],
                 analytics: {},
                 showAddScraperModal: false,
-                showEventsModal: false,
                 isAdding: false,
                 isTestingUrl: false,
                 isScrapingAll: false,
                 testResult: null,
                 activeMenu: null,
                 notifications: [],
-                selectedScraper: null,
-                scraperEvents: [],
                 
                 newScraper: {
                     name: '',
@@ -471,14 +375,7 @@
                     category: 'events',
                     update_interval: 60,
                     enabled: true,
-                    selector_config: {
-                        event_container: '',
-                        title: '',
-                        description: '',
-                        date: '',
-                        location: '',
-                        price: ''
-                    }
+                    selector_config: {}
                 },
                 
                 async init() {
@@ -490,32 +387,6 @@
                     try {
                         const response = await fetch('/api/web-scrapers');
                         this.scrapers = await response.json();
-                        
-                        // Load events for each scraper
-                        for (let scraper of this.scrapers) {
-                            try {
-                                const eventsResponse = await fetch(`/api/web-scrapers/${scraper.id}/events`, {
-                                    headers: { 'Accept': 'application/json' }
-                                });
-                                
-                                if (!eventsResponse.ok) {
-                                    const text = await eventsResponse.text();
-                                    throw new Error(`HTTP ${eventsResponse.status} ${eventsResponse.statusText} — ${text.slice(0,200)}`);
-                                }
-                                
-                                const ct = eventsResponse.headers.get('content-type') || '';
-                                if (!ct.includes('application/json')) {
-                                    const text = await eventsResponse.text();
-                                    throw new Error(`Expected JSON, got: ${ct}. Snippet: ${text.slice(0,200)}`);
-                                }
-                                
-                                const eventsData = await eventsResponse.json();
-                                scraper.events = eventsData.events || [];
-                            } catch (error) {
-                                console.error(`Error loading events for scraper ${scraper.id}:`, error);
-                                scraper.events = [];
-                            }
-                        }
                     } catch (error) {
                         this.showNotification('Error loading scrapers', 'error');
                     }
@@ -552,14 +423,7 @@
                                 category: 'events',
                                 update_interval: 60,
                                 enabled: true,
-                                selector_config: {
-                                    event_container: '',
-                                    title: '',
-                                    description: '',
-                                    date: '',
-                                    location: '',
-                                    price: ''
-                                }
+                                selector_config: {}
                             };
                             await this.loadScrapers();
                             await this.loadAnalytics();
@@ -624,21 +488,14 @@
                 async scrapeAll() {
                     this.isScrapingAll = true;
                     try {
-                        const response = await fetch('/api/web-scrapers/scrape-all', {
-                            method: 'POST'
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (response.ok) {
-                            this.showNotification(data.message, 'success');
-                            await this.loadScrapers();
-                            await this.loadAnalytics();
-                        } else {
-                            this.showNotification(data.error || 'Error scraping all websites', 'error');
+                        for (let scraper of this.scrapers) {
+                            if (scraper.is_active) {
+                                await this.scrapeWebsite(scraper.id);
+                            }
                         }
+                        this.showNotification('All scrapers completed', 'success');
                     } catch (error) {
-                        this.showNotification('Network error scraping websites', 'error');
+                        this.showNotification('Error scraping all websites', 'error');
                     } finally {
                         this.isScrapingAll = false;
                     }
@@ -711,116 +568,17 @@
                     }
                 },
                 
-                copyRssUrl(url) {
-                    navigator.clipboard.writeText(url).then(() => {
-                        this.showNotification('RSS URL copied to clipboard!', 'success');
-                    }).catch(() => {
-                        this.showNotification('Failed to copy URL', 'error');
-                    });
-                },
-                
-                async viewScraperEvents(scraperId) {
-                    try {
-                        const response = await fetch(`/api/web-scrapers/${scraperId}/events`, {
-                            headers: { 'Accept': 'application/json' }
-                        });
-                        
-                        if (!response.ok) {
-                            const text = await response.text();
-                            throw new Error(`HTTP ${response.status} ${response.statusText} — ${text.slice(0,200)}`);
-                        }
-                        
-                        const ct = response.headers.get('content-type') || '';
-                        if (!ct.includes('application/json')) {
-                            const text = await response.text();
-                            throw new Error(`Expected JSON, got: ${ct}. Snippet: ${text.slice(0,200)}`);
-                        }
-                        
-                        const data = await response.json();
-                        this.selectedScraper = this.scrapers.find(s => s.id === scraperId);
-                        this.scraperEvents = data.events || [];
-                        this.showEventsModal = true;
-                    } catch (error) {
-                        console.error(`Error loading events for scraper ${scraperId}:`, error);
-                        this.showNotification('Error loading events: ' + error.message, 'error');
+                getUpdateIntervalDisplay(interval) {
+                    if (!interval || interval === null || interval === 'null') {
+                        return 'Auto (10 min)';
                     }
+                    if (typeof interval === 'object') {
+                        return 'Auto (10 min)';
+                    }
+                    return `Every ${interval} minutes`;
                 }
             }
         }
     </script>
-
-    <!-- Scraper Events Modal -->
-    <div x-show="showEventsModal" 
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-50 overflow-y-auto" 
-         style="display: none;">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="showEventsModal = false"></div>
-            
-            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900">
-                            Events from <span x-text="selectedScraper?.name"></span>
-                        </h3>
-                        <button @click="showEventsModal = false" 
-                                class="text-gray-400 hover:text-gray-600">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="text-sm text-gray-600 mb-4">
-                        <span x-text="selectedScraper?.url"></span>
-                    </div>
-                    
-                    <!-- Events list -->
-                    <div class="space-y-3 max-h-96 overflow-y-auto">
-                        <template x-for="event in scraperEvents" :key="event.id">
-                            <div class="border border-gray-200 rounded-lg p-4">
-                                <div class="flex items-start justify-between">
-                                    <div class="flex-1">
-                                        <h4 class="font-medium text-gray-900" x-text="event.title"></h4>
-                                        <div class="text-sm text-gray-600 mt-1" x-text="event.start_datetime"></div>
-                                        <div class="text-sm text-gray-500 mt-1" x-text="event.location_name"></div>
-                                        <div class="text-sm text-gray-500 mt-1" x-show="event.description">
-                                            <span x-text="event.description"></span>
-                                        </div>
-                                        <div class="text-xs text-gray-400 mt-2">
-                                            Scraped: <span x-text="formatTimeAgo(event.scraped_at)"></span>
-                                        </div>
-                                    </div>
-                                    <div class="ml-4">
-                                        <a :href="event.url" target="_blank" 
-                                           class="text-blue-600 hover:text-blue-800 text-sm">
-                                            <i class="fas fa-external-link-alt"></i>
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                        
-                        <!-- No events message -->
-                        <div x-show="!scraperEvents || scraperEvents.length === 0" 
-                             class="text-center text-gray-500 py-8">
-                            <i class="fas fa-calendar-times text-4xl mb-2"></i>
-                            <p>No events found for this scraper</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <button @click="showEventsModal = false" 
-                            class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 </body>
 </html>

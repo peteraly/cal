@@ -94,6 +94,13 @@
                                        :class="event.price_info === 'Free' ? 'text-green-600' : 'text-blue-600'"
                                        x-text="'💰 ' + event.price_info"></p>
                                     <p x-show="event.description" class="text-sm text-gray-600 mt-1" x-text="event.description"></p>
+                                    <div x-show="event.url" class="mt-2">
+                                        <a :href="event.url" target="_blank" 
+                                           class="inline-flex items-center text-sm text-blue-600 hover:text-blue-800">
+                                            <i class="fas fa-external-link-alt mr-1"></i>
+                                            <span x-text="event.url.length > 50 ? event.url.substring(0, 50) + '...' : event.url"></span>
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
